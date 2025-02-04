@@ -1,19 +1,26 @@
 package updatevalue
 
+import (
+	"go-metrics-alerting/internal/engines/numberprocessor"
+)
+
 // CounterUpdateStrategyEngine handles counter metrics.
-type UpdateCounterValueStrategyEngine struct{}
+type UpdateCounterValueStrategyEngine[T int64 | float64] struct {
+	processor numberprocessor.NumberProcessorInterface[T]
+}
 
 // Update increments the current counter value.
-func (c *UpdateCounterValueStrategyEngine) Update(currentValue, newValue string) (string, error) {
-	current, err := parseNumber[int64](currentValue)
+func (c *UpdateCounterValueStrategyEngine[T]) Update(currentValue, newValue string) (string, error) {
+	current, err := c.processor.Parse(currentValue)
 	if err != nil {
-		return "", err
+		return "", ErrUnprocessableValue
 	}
 
-	new, err := parseNumber[int64](newValue)
+	new, err := c.processor.Parse(newValue)
 	if err != nil {
-		return "", err
+		return "", ErrUnprocessableValue
 	}
 
-	return formatNumber[int64](current + new), nil
+	// Сложение значений и возвращение отформатированного результата.
+	return c.processor.Format(current + new), nil
 }

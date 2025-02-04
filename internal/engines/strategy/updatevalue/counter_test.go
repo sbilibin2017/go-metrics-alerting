@@ -3,11 +3,14 @@ package updatevalue
 import (
 	"testing"
 
+	"go-metrics-alerting/internal/engines/numberprocessor"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestUpdateCounterValueStrategyEngine_Update(t *testing.T) {
-	engine := &UpdateCounterValueStrategyEngine{}
+	// Создаем экземпляр engine с Int64Processor для обработки int64 значений
+	engine := &UpdateCounterValueStrategyEngine[int64]{processor: numberprocessor.Int64Processor{}}
 
 	tests := []struct {
 		name         string
@@ -87,6 +90,7 @@ func TestUpdateCounterValueStrategyEngine_Update(t *testing.T) {
 
 			if tt.expectingErr {
 				assert.Error(t, err, "expected an error but got none")
+				assert.Equal(t, ErrUnprocessableValue, err, "unexpected error")
 			} else {
 				assert.NoError(t, err, "expected no error but got one")
 				assert.Equal(t, tt.expected, result, "unexpected result")
