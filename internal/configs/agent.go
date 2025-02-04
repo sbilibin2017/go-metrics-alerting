@@ -1,68 +1,59 @@
 package configs
 
 import (
-	"flag"
-	"fmt"
+	"os"
 	"time"
+
+	"github.com/joho/godotenv"
+	"github.com/spf13/cobra"
 )
 
-// Интерфейс для конфигурации агента
-type AgentConfigInterface interface {
-	GetPollInterval() time.Duration
-	GetReportInterval() time.Duration
-	GetServerURL() string
-}
-
-// Структура конфигурации для агента
 type AgentConfig struct {
-	PollInterval   time.Duration // Интервал для опроса метрик
-	ReportInterval time.Duration // Интервал для отправки метрик
-	ServerURL      string        // URL сервера для отправки метрик
+	Address        string
+	ReportInterval time.Duration
+	PollInterval   time.Duration
 }
 
-// Функция для создания конфигурации агента с флагами и переменными окружения
-func NewAgentConfig() *AgentConfig {
-	// Флаги для конфигурации агента
-	serverURL := flag.String("a", "", "Адрес эндпоинта HTTP-сервера (например, http://localhost:8080)")
-	reportInterval := flag.Int("r", 10, "Частота отправки метрик на сервер (в секундах)")
-	pollInterval := flag.Int("p", 2, "Частота опроса метрик (в секундах)")
-
-	flag.Parse()
-
-	// Получаем значение из переменной окружения для серверного URL, если оно установлено
-	finalServerURL := GetEnvOrDefault(*serverURL, "SERVER_URL", "http://localhost:8080")
-
-	// Получаем значения из переменных окружения для интервалов
-	pollIntervalEnv := GetEnvOrDefault(fmt.Sprint(*pollInterval), "POLL_INTERVAL", "2")
-	reportIntervalEnv := GetEnvOrDefault(fmt.Sprint(*reportInterval), "REPORT_INTERVAL", "10")
-
-	// Преобразуем интервалы в тип time.Duration
-	pollIntervalDuration, err := time.ParseDuration(pollIntervalEnv + "s")
+func LoadAgentConfigFromEnv() (*AgentConfig, error) {
+	err := godotenv.Load()
 	if err != nil {
-		pollIntervalDuration = 2 * time.Second
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
-
-	reportIntervalDuration, err := time.ParseDuration(reportIntervalEnv + "s")
-	if err != nil {
-		reportIntervalDuration = 10 * time.Second
-	}
-
+	address := os.Getenv("ADDRESS")
+	reportIntervalDuration, _ := time.ParseDuration(os.Getenv("REPORT_INTERVAL"))
+	pollIntervalDuration, _ := time.ParseDuration(os.Getenv("POLL_INTERVAL"))
 	return &AgentConfig{
-		PollInterval:   pollIntervalDuration,
+		Address:        address,
 		ReportInterval: reportIntervalDuration,
-		ServerURL:      finalServerURL,
+		PollInterval:   pollIntervalDuration,
+	}, nil
+}
+
+func LoadAgentConfigFromFlags() (*AgentConfig, error) {
+	var config AgentConfig
+
+	// Создаем новый корневой командный объект
+	var rootCmd = &cobra.Command{
+		Use:   "agent",
+		Short: "Agent to collect and report metrics",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Не нужно выполнять здесь, можно оставить для обработки флагов
+		},
 	}
-}
 
-// Реализация методов интерфейса AgentConfigInterface для AgentConfig
-func (config *AgentConfig) GetPollInterval() time.Duration {
-	return config.PollInterval
-}
+	// Добавляем флаги для конфигурации
+	rootCmd.Flags().StringVarP(&config.Address, "address", "a", "localhost:8080", "HTTP server endpoint")
+	rootCmd.Flags().DurationVarP(&config.ReportInterval, "reportInterval", "r", 10*time.Second, "Report interval (default 10s)")
+	rootCmd.Flags().DurationVarP(&config.PollInterval, "pollInterval", "p", 2*time.Second, "Poll interval (default 2s)")
 
-func (config *AgentConfig) GetReportInterval() time.Duration {
-	return config.ReportInterval
-}
+	// Выполняем команду и парсим флаги
+	if err := rootCmd.Execute(); err != nil {
+		return nil, err
+	}
 
-func (config *AgentConfig) GetServerURL() string {
-	return config.ServerURL
+	// Возвращаем структуру с конфигурацией
+	return &config, nil
 }

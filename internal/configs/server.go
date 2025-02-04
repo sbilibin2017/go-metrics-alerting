@@ -1,34 +1,41 @@
 package configs
 
 import (
-	"flag"
+	"os"
+
+	"github.com/joho/godotenv"
+	"github.com/spf13/cobra"
 )
 
-// Интерфейс для конфигурации сервера
-type ServerConfigInterface interface {
-	GetServerUrl() string
-}
-
-// Структура конфигурации для сервера
 type ServerConfig struct {
-	ServerUrl string // Адрес эндпоинта HTTP-сервера
+	Address string
 }
 
-// Функция для создания конфигурации сервера с флагами и переменными окружения
-func NewServerConfig() *ServerConfig {
-	// Флаг для адреса сервера
-	serverURL := flag.String("a", "", "Адрес эндпоинта HTTP-сервера")
-	flag.Parse()
-
-	// Получаем значение из переменной окружения SERVER_URL или из флага
-	finalServerURL := GetEnvOrDefault(*serverURL, "SERVER_URL", "localhost:8080")
-
-	return &ServerConfig{
-		ServerUrl: finalServerURL,
+func LoadServerConfigFromEnv() (*ServerConfig, error) {
+	err := godotenv.Load()
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
 	}
+	address := os.Getenv("ADDRESS")
+	return &ServerConfig{
+		Address: address,
+	}, nil
 }
 
-// Реализация метода интерфейса ServerConfigInterface для ServerConfig
-func (config *ServerConfig) GetServerUrl() string {
-	return config.ServerUrl
+func LoadServerConfigFromFlags() (*ServerConfig, error) {
+	var config ServerConfig
+	var rootCmd = &cobra.Command{
+		Use:   "server",
+		Short: "Server for handling HTTP requests",
+		Run: func(cmd *cobra.Command, args []string) {
+		},
+	}
+	rootCmd.Flags().StringVarP(&config.Address, "address", "a", "localhost:8080", "HTTP server endpoint")
+	if err := rootCmd.Execute(); err != nil {
+		return nil, err
+	}
+	return &config, nil
 }
