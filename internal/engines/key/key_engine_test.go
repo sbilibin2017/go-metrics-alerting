@@ -1,56 +1,72 @@
 package key
 
 import (
+	"errors"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
-func TestEncode(t *testing.T) {
-	ke := NewKeyEngine()
+// Тест Encode
+func TestKeyEngine_Encode(t *testing.T) {
+	engine := NewKeyEngine()
 
 	tests := []struct {
-		metricType string
-		metricName string
-		expected   string
+		name    string
+		key     *Key
+		want    string
+		wantErr error
 	}{
-		{"counter", "requests", "counter:requests"},
-		{"gauge", "temperature", "gauge:temperature"},
-		{"", "metric", ""},
-		{"metric", "", ""},
+		{"Valid Key", &Key{"cpu", "usage"}, "cpu:usage", nil},
+		{"Empty Type", &Key{"", "usage"}, "", ErrInvalidKeyFormat},
+		{"Empty Name", &Key{"cpu", ""}, "", ErrInvalidKeyFormat},
+		{"Nil Key", nil, "", ErrInvalidKeyFormat},
 	}
 
-	for _, test := range tests {
-		result := ke.Encode(test.metricType, test.metricName)
-		assert.Equal(t, test.expected, result)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := engine.Encode(tt.key)
+
+			if got != tt.want {
+				t.Errorf("Encode() = %v, want %v", got, tt.want)
+			}
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("Encode() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }
 
-func TestDecode(t *testing.T) {
-	ke := NewKeyEngine()
+// Тест Decode
+func TestKeyEngine_Decode(t *testing.T) {
+	engine := NewKeyEngine()
 
 	tests := []struct {
-		key      string
-		expType  string
-		expName  string
-		expError error
+		name    string
+		key     string
+		want    *Key
+		wantErr error
 	}{
-		{"counter:requests", "counter", "requests", nil},
-		{"gauge:temperature", "gauge", "temperature", nil},
-		{"invalidkey", "", "", ErrInvalidKeyFormat},
-		{":missingtype", "", "", ErrInvalidKeyFormat},
-		{"missingname:", "", "", ErrInvalidKeyFormat},
+		{"Valid Key", "cpu:usage", &Key{"cpu", "usage"}, nil},
+		{"No Separator", "cpuusage", nil, ErrInvalidKeyFormat},
+		{"Empty Type", ":usage", nil, ErrInvalidKeyFormat},
+		{"Empty Name", "cpu:", nil, ErrInvalidKeyFormat},
+		{"Double Separator", "cpu:usage:extra", &Key{"cpu", "usage:extra"}, nil},
 	}
 
-	for _, test := range tests {
-		mType, mName, err := ke.Decode(test.key)
-		assert.Equal(t, test.expType, mType)
-		assert.Equal(t, test.expName, mName)
-		if test.expError != nil {
-			assert.Error(t, err)
-			assert.EqualError(t, err, test.expError.Error())
-		} else {
-			assert.NoError(t, err)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := engine.Decode(tt.key)
+
+			if tt.want != nil {
+				if got == nil || got.MetricType != tt.want.MetricType || got.MetricName != tt.want.MetricName {
+					t.Errorf("Decode() = %+v, want %+v", got, tt.want)
+				}
+			} else if got != nil {
+				t.Errorf("Decode() expected nil, got %+v", got)
+			}
+
+			if !errors.Is(err, tt.wantErr) {
+				t.Errorf("Decode() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
 	}
 }

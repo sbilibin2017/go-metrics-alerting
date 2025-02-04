@@ -1,33 +1,31 @@
 package key
 
 import (
+	"fmt"
 	"strings"
 )
 
-// KeyEngine реализует движок
+// KeyEngine реализует KeyEngineInterface.
 type KeyEngine struct{}
 
-// NewKeyEngine создает новый движок.
-func NewKeyEngine() *KeyEngine {
+// NewKeyEngine создает новый экземпляр KeyEngine.
+func NewKeyEngine() KeyEngineInterface {
 	return &KeyEngine{}
 }
 
-// Encode комбинирует тип и название метрики "type:name".
-func (k *KeyEngine) Encode(metricType, metricName string) string {
-	if metricType == "" || metricName == "" {
-		return ""
+// Encode комбинирует тип и название метрики в строку "type:name".
+func (k *KeyEngine) Encode(key *Key) (string, error) {
+	if key == nil || key.MetricType == "" || key.MetricName == "" {
+		return "", ErrInvalidKeyFormat
 	}
-	return metricType + ":" + metricName
+	return fmt.Sprintf("%s:%s", key.MetricType, key.MetricName), nil
 }
 
-// Decode разбивает закодированный ключ на тип и название метрики.
-func (k *KeyEngine) Decode(key string) (string, string, error) {
+// Decode разбивает строку "type:name" на тип и название метрики.
+func (k *KeyEngine) Decode(key string) (*Key, error) {
 	metricType, metricName, found := strings.Cut(key, ":")
 	if !found || metricType == "" || metricName == "" {
-		return "", "", ErrInvalidKeyFormat
+		return nil, ErrInvalidKeyFormat
 	}
-	return metricType, metricName, nil
+	return &Key{MetricType: metricType, MetricName: metricName}, nil
 }
-
-// Проверка соответствия интерфейсу
-var _ KeyEngineInterface = (*KeyEngine)(nil)
