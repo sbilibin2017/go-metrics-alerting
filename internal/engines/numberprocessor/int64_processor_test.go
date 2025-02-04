@@ -45,7 +45,7 @@ func TestInt64Processor_Parse(t *testing.T) {
 		},
 	}
 
-	processor := Int64Processor{}
+	processor := NewInt64ProcessorEngine()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -84,7 +84,7 @@ func TestInt64ParserFormatter_Format(t *testing.T) {
 		},
 	}
 
-	processor := Int64Processor{}
+	processor := NewInt64ProcessorEngine()
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

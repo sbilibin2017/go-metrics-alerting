@@ -1,20 +1,29 @@
 package updatevalue
 
 import (
+	"fmt"
 	"go-metrics-alerting/internal/engines/numberprocessor"
 )
 
-// GaugeUpdateStrategyEngine handles gauge metrics.
-type UpdateGaugeValueStrategyEngine[T int64 | float64] struct {
-	processor numberprocessor.NumberProcessorInterface[T]
+// Обработчик обновлений для измерителей (работает с float64)
+type UpdateGaugeValueStrategyEngine struct {
+	processor numberprocessor.NumberProcessorEngineInterface[float64]
 }
 
-// Update sets the gauge value.
-func (g *UpdateGaugeValueStrategyEngine[T]) Update(_, newValue string) (string, error) {
+func NewUpdateGaugeValueStrategyEngine(
+	processor numberprocessor.NumberProcessorEngineInterface[float64],
+) *UpdateGaugeValueStrategyEngine {
+	return &UpdateGaugeValueStrategyEngine{processor: processor}
+}
+
+// Реализация метода Update для обновления значения измерителя
+func (g *UpdateGaugeValueStrategyEngine) Update(_, newValue string) (string, error) {
 	// Парсим новое значение
 	new, err := g.processor.Parse(newValue)
 	if err != nil {
-		return "", ErrUnprocessableValue
+		return "", fmt.Errorf("error parsing new value '%s': %w", newValue, err)
 	}
+
+	// Возвращаем отформатированное новое значение
 	return g.processor.Format(new), nil
 }

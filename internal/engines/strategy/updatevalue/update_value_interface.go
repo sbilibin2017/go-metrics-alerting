@@ -1,6 +1,7 @@
 package updatevalue
 
-// StrategyUpdateEngineInterface defines the behavior for metric update strategies.
+// Интерфейс для обновления значений стратегии.
 type UpdateValueStrategyEngineInterface interface {
+	// Update обновляет значение, используя текущие и новые значения.
 	Update(currentValue, newValue string) (string, error)
 }

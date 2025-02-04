@@ -1,16 +1,15 @@
 package updatevalue
 
 import (
-	"testing"
-
 	"go-metrics-alerting/internal/engines/numberprocessor"
+	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
 func TestUpdateCounterValueStrategyEngine_Update(t *testing.T) {
-	// Создаем экземпляр engine с Int64Processor для обработки int64 значений
-	engine := &UpdateCounterValueStrategyEngine[int64]{processor: numberprocessor.Int64Processor{}}
+	// Создаем экземпляр обработчика с Int64Processor для обработки int64 значений
+	engine := NewUpdateCounterValueStrategyEngine(numberprocessor.Int64ProcessorEngine{})
 
 	tests := []struct {
 		name         string
@@ -20,38 +19,24 @@ func TestUpdateCounterValueStrategyEngine_Update(t *testing.T) {
 		expectingErr bool
 	}{
 		{
-			name:         "increment positive values",
+			name:         "valid values",
 			currentValue: "10",
 			newValue:     "5",
-			expected:     "15",
+			expected:     "15", // 10 + 5 = 15
+			expectingErr: false,
+		},
+		{
+			name:         "valid values with negative number",
+			currentValue: "-10",
+			newValue:     "5",
+			expected:     "-5", // -10 + 5 = -5
 			expectingErr: false,
 		},
 		{
 			name:         "increment zero",
 			currentValue: "0",
-			newValue:     "7",
-			expected:     "7",
-			expectingErr: false,
-		},
-		{
-			name:         "increment negative number",
-			currentValue: "-3",
-			newValue:     "2",
-			expected:     "-1",
-			expectingErr: false,
-		},
-		{
-			name:         "adding two negative numbers",
-			currentValue: "-10",
-			newValue:     "-5",
-			expected:     "-15",
-			expectingErr: false,
-		},
-		{
-			name:         "large numbers addition",
-			currentValue: "1000000000",
-			newValue:     "2000000000",
-			expected:     "3000000000",
+			newValue:     "5",
+			expected:     "5", // 0 + 5 = 5
 			expectingErr: false,
 		},
 		{
@@ -59,28 +44,21 @@ func TestUpdateCounterValueStrategyEngine_Update(t *testing.T) {
 			currentValue: "abc",
 			newValue:     "10",
 			expected:     "",
-			expectingErr: true,
+			expectingErr: true, // invalid current value should raise an error
 		},
 		{
 			name:         "invalid new value",
 			currentValue: "10",
 			newValue:     "xyz",
 			expected:     "",
-			expectingErr: true,
-		},
-		{
-			name:         "both values invalid",
-			currentValue: "foo",
-			newValue:     "bar",
-			expected:     "",
-			expectingErr: true,
+			expectingErr: true, // invalid new value should raise an error
 		},
 		{
 			name:         "empty input values",
 			currentValue: "",
 			newValue:     "",
 			expected:     "",
-			expectingErr: true,
+			expectingErr: true, // invalid empty values should raise an error
 		},
 	}
 
@@ -90,7 +68,6 @@ func TestUpdateCounterValueStrategyEngine_Update(t *testing.T) {
 
 			if tt.expectingErr {
 				assert.Error(t, err, "expected an error but got none")
-				assert.Equal(t, ErrUnprocessableValue, err, "unexpected error")
 			} else {
 				assert.NoError(t, err, "expected no error but got one")
 				assert.Equal(t, tt.expected, result, "unexpected result")

@@ -7,7 +7,7 @@ import (
 )
 
 func TestFloat64Processor_Parse(t *testing.T) {
-	processor := &Float64Processor{}
+	processor := NewFloat64ProcessorEngine()
 
 	tests := []struct {
 		name        string
@@ -56,7 +56,7 @@ func TestFloat64Processor_Parse(t *testing.T) {
 }
 
 func TestFloat64Processor_Format(t *testing.T) {
-	processor := &Float64Processor{}
+	processor := NewFloat64ProcessorEngine()
 
 	tests := []struct {
 		name     string
