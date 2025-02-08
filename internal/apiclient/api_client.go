@@ -2,13 +2,12 @@ package apiclient
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/go-resty/resty/v2"
 )
 
-// Response представляет ответ на POST-запрос
+// APIResponse представляет ответ на POST-запрос
 type APIResponse struct {
 	StatusCode int
 	Body       string
@@ -27,15 +26,20 @@ func NewRestyClient() *restyClient {
 }
 
 // Post выполняет POST-запрос, используя Resty
+// Post выполняет POST-запрос, используя Resty
 func (r *restyClient) Post(urlString string, headers map[string]string) (*APIResponse, error) {
-	// Добавляем схему, если она отсутствует
-	parsedURL, err := addSchemeIfMissing(urlString)
-	if err != nil {
-		return nil, err
+	// Если в URL нет схемы, добавляем http:// по умолчанию
+	if !strings.HasPrefix(urlString, "http://") && !strings.HasPrefix(urlString, "https://") {
+		urlString = "http://" + urlString
 	}
 
 	// Создаем новый запрос
 	req := r.client.R()
+
+	// Если в заголовках нет Content-Type, устанавливаем его по умолчанию
+	if _, ok := headers["Content-Type"]; !ok {
+		headers["Content-Type"] = "application/json"
+	}
 
 	// Устанавливаем заголовки
 	for key, value := range headers {
@@ -43,30 +47,22 @@ func (r *restyClient) Post(urlString string, headers map[string]string) (*APIRes
 	}
 
 	// Выполняем POST-запрос
-	resp, err := req.Post(parsedURL)
+	resp, err := req.Post(urlString)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error while making POST request: %v", err)
 	}
 
-	// Возвращаем ответ
+	// Проверяем статус код ответа
+	if resp.StatusCode() >= 400 {
+		return &APIResponse{
+			StatusCode: resp.StatusCode(),
+			Body:       resp.String(),
+		}, fmt.Errorf("request failed with status %d", resp.StatusCode())
+	}
+
+	// Возвращаем успешный ответ
 	return &APIResponse{
 		StatusCode: resp.StatusCode(),
 		Body:       resp.String(),
 	}, nil
-}
-
-// Функция, которая добавляет схему, если она отсутствует
-func addSchemeIfMissing(urlString string) (string, error) {
-	// Если в URL нет схемы, добавляем http:// по умолчанию
-	if !strings.HasPrefix(urlString, "http://") && !strings.HasPrefix(urlString, "https://") {
-		urlString = "http://" + urlString
-	}
-
-	// Теперь парсим URL
-	parsedURL, err := url.Parse(urlString)
-	if err != nil {
-		return "", fmt.Errorf("invalid URL: %v", err)
-	}
-
-	return parsedURL.String(), nil
 }

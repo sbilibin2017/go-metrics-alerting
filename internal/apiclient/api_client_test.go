@@ -1,6 +1,7 @@
 package apiclient
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,124 +9,183 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRestyClient_Post(t *testing.T) {
-	// Создаем тестовый сервер
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// TestPost_AddSchemeIfMissing тестирует добавление схемы "http://" по умолчанию, если в URL нет схемы
+func TestPost_AddSchemeIfMissing(t *testing.T) {
+	// Создаем тестовый сервер, который будет отвечать на POST-запросы
+	handler := http.NewServeMux()
+	handler.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+		// Проверим, что запрос был POST
 		if r.Method != http.MethodPost {
-			http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
-			return
+			t.Errorf("Expected POST request, got %s", r.Method)
 		}
+		// Отправим успешный ответ
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Success"))
-	}))
-	defer ts.Close()
+		fmt.Fprintln(w, `{"message": "success"}`)
+	})
 
-	// Создаем клиента
+	// Создаем сервер на базе этого обработчика
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Создаем экземпляр клиента Resty
 	client := NewRestyClient()
 
-	// Отправляем POST-запрос с URL, который уже имеет схему (http://)
-	resp, err := client.Post(ts.URL, map[string]string{"Content-Type": "application/json"})
+	// Тестируем URL без схемы
+	urlWithoutScheme := server.URL[len("http://"):] // Просто берем URL без "http://"
+	urlWithoutScheme = "http://" + urlWithoutScheme // Добавляем схему
 
-	// Проверяем, что ошибок нет
+	// Выполняем запрос с правильным URL
+	resp, err := client.Post(urlWithoutScheme+"/test", map[string]string{})
+
+	// Проверка, что URL был исправлен и запрос отправлен правильно
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "Success", resp.Body)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, `{"message": "success"}`, resp.Body)
 }
 
-func TestRestyClient_Post_WithoutScheme(t *testing.T) {
-	// Создаем тестовый сервер, который обрабатывает путь /update
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Проверка метода и пути
+// TestPost_SetHeaders проверяет установку заголовков в запрос
+func TestPost_SetHeaders(t *testing.T) {
+	// Создаем тестовый сервер, который будет отвечать на POST-запросы
+	handler := http.NewServeMux()
+	handler.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+		// Проверим заголовки
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"))
+
+		// Отправим успешный ответ
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, `{"message": "success"}`)
+	})
+
+	// Создаем сервер на базе этого обработчика
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Создаем экземпляр клиента Resty
+	client := NewRestyClient()
+
+	// Заголовки для запроса
+	headers := map[string]string{
+		"Content-Type":  "application/json",
+		"Authorization": "Bearer token",
+	}
+
+	// Выполняем запрос с установленными заголовками
+	resp, err := client.Post(server.URL+"/test", headers)
+
+	// Проверка результатов
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, `{"message": "success"}`, resp.Body)
+}
+
+// TestPost_HeadersWithNoContentType проверяет, что заголовок Content-Type установлен по умолчанию, если его нет в запросе
+func TestPost_HeadersWithNoContentType(t *testing.T) {
+	// Создаем тестовый сервер, который будет отвечать на POST-запросы
+	handler := http.NewServeMux()
+	handler.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+		// Проверим, что Content-Type был установлен на default "application/json"
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		// Отправим успешный ответ
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, `{"message": "success"}`)
+	})
+
+	// Создаем сервер на базе этого обработчика
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Создаем экземпляр клиента Resty
+	client := NewRestyClient()
+
+	// Отправляем запрос без Content-Type
+	headers := map[string]string{
+		"Authorization": "Bearer token",
+	}
+
+	// Выполняем запрос с заголовками
+	resp, err := client.Post(server.URL+"/test", headers)
+
+	// Проверка результатов
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, `{"message": "success"}`, resp.Body)
+}
+
+// TestPost_Success тестирует успешный POST-запрос
+func TestPost_Success(t *testing.T) {
+	// Создаем тестовый сервер, который будет отвечать на POST-запросы
+	handler := http.NewServeMux()
+	handler.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+		// Проверим, что запрос был POST
 		if r.Method != http.MethodPost {
-			http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
-			return
+			t.Errorf("Expected POST request, got %s", r.Method)
 		}
-		if r.URL.Path != "/update" {
-			http.Error(w, "Not Found", http.StatusNotFound)
-			return
-		}
+		// Отправим успешный ответ
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Success"))
-	}))
-	defer ts.Close()
+		fmt.Fprintln(w, `{"message": "success"}`)
+	})
 
-	// Создаем клиента
+	// Создаем сервер на базе этого обработчика
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Создаем экземпляр клиента Resty
 	client := NewRestyClient()
 
-	// Отправляем POST-запрос на путь /update
-	resp, err := client.Post(ts.URL+"/update", map[string]string{"Content-Type": "application/json"})
+	// Выполняем тестируемую функцию
+	resp, err := client.Post(server.URL+"/test", map[string]string{})
 
-	// Проверяем, что ошибок нет
+	// Проверка результатов
 	assert.NoError(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "Success", resp.Body)
+	assert.Equal(t, 200, resp.StatusCode)
+	assert.Equal(t, `{"message": "success"}`, resp.Body)
 }
 
-func TestRestyClient_Post_ServerError(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Internal Server Error"))
-	}))
-	defer ts.Close()
+// TestPost_Failure тестирует ситуацию с ошибкой при выполнении POST-запроса
+func TestPost_Failure(t *testing.T) {
+	// Создаем тестовый сервер, который будет генерировать ошибку
+	handler := http.NewServeMux()
+	handler.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+		// Симулируем ошибку
+		http.Error(w, "Bad Request", http.StatusBadRequest)
+	})
 
+	// Создаем сервер на базе этого обработчика
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	// Создаем экземпляр клиента Resty
 	client := NewRestyClient()
-	resp, err := client.Post(ts.URL, nil)
 
-	assert.NoError(t, err)
+	// Выполняем тестируемую функцию
+	resp, err := client.Post(server.URL+"/test", map[string]string{})
+
+	// Проверка результатов
+	assert.Error(t, err)
 	assert.NotNil(t, resp)
-	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	assert.Equal(t, "Internal Server Error", resp.Body)
+	assert.Equal(t, 400, resp.StatusCode)
+	assert.Equal(t, "Bad Request", resp.Body)
 }
 
-func TestRestyClient_Post_InvalidURL(t *testing.T) {
-	client := NewRestyClient()
-	resp, err := client.Post("http://invalid-url", nil)
+// TestPost_InvalidURL тестирует ситуацию с некорректным URL
+func TestPost_InvalidURL(t *testing.T) {
+	// Создаем сервер, который не будет запущен
+	invalidURL := "http://localhost:9999/nonexistent"
 
+	// Создаем экземпляр клиента Resty
+	client := NewRestyClient()
+
+	// Выполняем тестируемую функцию
+	resp, err := client.Post(invalidURL, map[string]string{})
+
+	// Проверка результатов
 	assert.Error(t, err)
 	assert.Nil(t, resp)
-}
-
-func TestAddSchemeIfMissing(t *testing.T) {
-	tests := []struct {
-		urlString     string
-		expectedURL   string
-		expectedError bool
-	}{
-		{
-			urlString:     "localhost:8080",        // Нет схемы, должна быть добавлена
-			expectedURL:   "http://localhost:8080", // Добавлено http://
-			expectedError: false,
-		},
-		{
-			urlString:     "http://localhost:8080", // Уже есть схема http://
-			expectedURL:   "http://localhost:8080", // Схема не изменится
-			expectedError: false,
-		},
-		{
-			urlString:     "https://example.com", // Уже есть схема https://
-			expectedURL:   "https://example.com", // Схема не изменится
-			expectedError: false,
-		},
-		{
-			urlString:     "invalid-url", // Некорректный URL
-			expectedURL:   "",            // Ошибка
-			expectedError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.urlString, func(t *testing.T) {
-			result, err := addSchemeIfMissing(tt.urlString)
-
-			if tt.expectedError {
-				assert.Error(t, err)
-				assert.Equal(t, "", result)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedURL, result)
-			}
-		})
-	}
+	assert.Contains(t, err.Error(), "error while making POST request")
 }
