@@ -21,7 +21,6 @@ const (
 
 // Метод валидации для запроса
 func (r *GetMetricValueRequest) Validate() error {
-	// Если тип пустой, возвращаем ошибку с кодом 400
 	if r.Type == emptyGetStringRequest {
 		return &apierror.APIError{
 			Code:    http.StatusBadRequest,
@@ -29,10 +28,9 @@ func (r *GetMetricValueRequest) Validate() error {
 		}
 	}
 
-	// Если имя пустое, возвращаем ошибку с кодом 400
 	if r.Name == emptyGetStringRequest {
 		return &apierror.APIError{
-			Code:    http.StatusNotFound,
+			Code:    http.StatusBadRequest,
 			Message: "Metric name is required",
 		}
 	}
@@ -47,34 +45,13 @@ type GetValueService interface {
 
 // Регистрация обработчика для получения значения метрики
 func RegisterGetMetricValueHandler(r *gin.Engine, svc GetValueService) {
-	// Отключаем автоматический редирект на маршрут с "/"
 	r.RedirectTrailingSlash = false
 
-	// Основной обработчик получения значения метрики
 	r.GET("/value/:type/:name", func(c *gin.Context) {
 		getMetricValueHandler(svc, c)
 	})
 
-	// Если передан только тип метрики без имени — возвращаем ошибку 400 с нужным текстом
-	r.GET("/value/:type", func(c *gin.Context) {
-		metricType := c.Param("type")
-
-		// Создаем запрос
-		getRequest := &GetMetricValueRequest{
-			Type: metricType,
-			Name: "", // Имя отсутствует
-		}
-
-		// Проверка валидации запроса
-		if err := getRequest.Validate(); err != nil {
-			// Если ошибка валидации, отправляем ошибку с кодом и сообщением
-			apiErr, ok := err.(*apierror.APIError)
-			if ok {
-				c.String(apiErr.Code, apiErr.Message)
-			}
-			return
-		}
-	})
+	r.GET("/value/:type", getMetricValueByTypeHandler)
 }
 
 // Обработчик получения значения метрики
@@ -82,26 +59,23 @@ func getMetricValueHandler(service GetValueService, c *gin.Context) {
 	metricType := c.Param("type")
 	metricName := c.Param("name")
 
-	// Создаем запрос
 	getRequest := &GetMetricValueRequest{
 		Type: metricType,
 		Name: metricName,
 	}
 
-	// Проверка валидации запроса
 	if err := getRequest.Validate(); err != nil {
-		// Если ошибка валидации, отправляем ошибку с кодом и сообщением
 		apiErr, ok := err.(*apierror.APIError)
 		if ok {
 			c.String(apiErr.Code, apiErr.Message)
+		} else {
+			c.String(http.StatusBadRequest, "Invalid metric request")
 		}
 		return
 	}
 
-	// Получаем значение метрики через сервис
 	metricValue, err := service.GetMetricValue(getRequest)
 	if err != nil {
-		// Если ошибка при получении метрики, отправляем соответствующий ответ
 		if apiErr, ok := err.(*apierror.APIError); ok {
 			c.String(apiErr.Code, apiErr.Message)
 		} else {
@@ -110,9 +84,30 @@ func getMetricValueHandler(service GetValueService, c *gin.Context) {
 		return
 	}
 
-	// Если метрика найдена, отправляем значение метрики
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.Header("Date", time.Now().UTC().Format(time.RFC1123))
 	c.Header("Content-Length", strconv.Itoa(len(metricValue)))
 	c.String(http.StatusOK, metricValue)
+}
+
+// Обработчик для получения значения метрики только по типу
+func getMetricValueByTypeHandler(c *gin.Context) {
+	metricType := c.Param("type")
+
+	getRequest := &GetMetricValueRequest{
+		Type: metricType,
+		Name: "",
+	}
+
+	if err := getRequest.Validate(); err != nil {
+		apiErr, ok := err.(*apierror.APIError)
+		if ok {
+			c.String(apiErr.Code, apiErr.Message)
+		} else {
+			c.String(http.StatusBadRequest, "Invalid metric request")
+		}
+		return
+	}
+
+	c.String(http.StatusBadRequest, "Metric name is required")
 }

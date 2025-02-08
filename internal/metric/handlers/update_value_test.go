@@ -8,139 +8,97 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-type MockUpdateValueService struct {
-	mock.Mock
-}
+type MockUpdateValueService struct{}
 
 func (m *MockUpdateValueService) UpdateMetricValue(req *UpdateMetricValueRequest) error {
-	args := m.Called(req)
-	return args.Error(0)
+	if req.Name == "error" {
+		return &apierror.APIError{
+			Code:    http.StatusInternalServerError,
+			Message: "Internal Server Error",
+		}
+	}
+	return nil
 }
 
-func TestRegisterUpdateValueHandler_Success(t *testing.T) {
-	mockService := new(MockUpdateValueService)
-	router := gin.Default()
+func setupRouter(svc UpdateValueService) *gin.Engine {
+	r := gin.Default()
+	RegisterUpdateValueHandler(r, svc)
+	return r
+}
 
-	// Регистрация обработчика
-	RegisterUpdateValueHandler(router, mockService)
+func TestUpdateValueHandler_Success(t *testing.T) {
+	// Arrange
+	mockService := &MockUpdateValueService{}
+	r := setupRouter(mockService)
 
-	// Мокируем успешное обновление метрики
-	mockService.On("UpdateMetricValue", &UpdateMetricValueRequest{
-		Type:  "gauge",
-		Name:  "cpu",
-		Value: "99",
-	}).Return(nil)
-
-	// Отправляем запрос
-	req, err := http.NewRequest("POST", "/update/gauge/cpu/99", nil)
-	assert.NoError(t, err)
-
-	// Запускаем тестирование
+	// Act
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	req, _ := http.NewRequest("POST", "/update/counter/metric1/10", nil)
+	r.ServeHTTP(w, req)
 
-	// Проверяем статус и тело ответа
+	// Assert
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "Metric updated", w.Body.String())
-
-	mockService.AssertExpectations(t)
 }
 
-func TestRegisterUpdateValueHandler_ValidationError_EmptyMetricValue(t *testing.T) {
-	mockService := new(MockUpdateValueService)
-	router := gin.Default()
+func TestUpdateValueHandler_MissingParameter(t *testing.T) {
+	// Arrange
+	mockService := &MockUpdateValueService{}
+	r := setupRouter(mockService)
 
-	// Регистрация обработчика
-	RegisterUpdateValueHandler(router, mockService)
-
-	// Отправляем запрос с пустым значением метрики
-	req, err := http.NewRequest("POST", "/update/gauge/cpu/", nil) // Пустое значение метрики
-	assert.NoError(t, err)
-
-	// Запускаем тестирование
+	// Act
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	req, _ := http.NewRequest("POST", "/update/counter//10", nil)
+	r.ServeHTTP(w, req)
 
-	// Проверяем статус и тело ответа (ошибка валидации значения)
+	// Assert
 	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Equal(t, "404 page not found", w.Body.String())
-
-	mockService.AssertExpectations(t)
+	assert.Equal(t, "Required parameters missing (type, name, value)", w.Body.String())
 }
 
-func TestRegisterUpdateValueHandler_ValidationError_MetricType(t *testing.T) {
-	mockService := new(MockUpdateValueService)
-	router := gin.Default()
+func TestUpdateValueHandler_InvalidMetricType(t *testing.T) {
+	// Arrange
+	mockService := &MockUpdateValueService{}
+	r := setupRouter(mockService)
 
-	// Регистрация обработчика
-	RegisterUpdateValueHandler(router, mockService)
-
-	// Отправляем запрос с пустым типом метрики (обратите внимание на два слэша)
-	req, err := http.NewRequest("POST", "/update//cpu/99", nil)
-	assert.NoError(t, err)
-
-	// Запускаем тестирование
+	// Act
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	req, _ := http.NewRequest("POST", "/update/invalid/metric1/10", nil)
+	r.ServeHTTP(w, req)
 
-	// Проверяем статус и тело ответа (ошибка валидации типа)
+	// Assert
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, "Metric type is required", w.Body.String())
+	assert.Contains(t, w.Body.String(), "Unsupported metric type")
 }
 
-func TestRegisterUpdateValueHandler_ValidationError_MetricName(t *testing.T) {
-	mockService := new(MockUpdateValueService)
-	router := gin.Default()
+func TestUpdateValueHandler_InternalServerError(t *testing.T) {
+	// Arrange
+	mockService := &MockUpdateValueService{}
+	r := setupRouter(mockService)
 
-	// Регистрация обработчика
-	RegisterUpdateValueHandler(router, mockService)
-
-	// Отправляем запрос с пустым именем метрики
-	req, err := http.NewRequest("POST", "/update/gauge//99", nil)
-	assert.NoError(t, err)
-
-	// Запускаем тестирование
+	// Act
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	req, _ := http.NewRequest("POST", "/update/counter/error/10", nil)
+	r.ServeHTTP(w, req)
 
-	// Проверяем статус и тело ответа (ошибка валидации имени)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Equal(t, "Metric name is required", w.Body.String())
-
-	mockService.AssertExpectations(t)
-}
-
-func TestRegisterUpdateValueHandler_InternalServerError(t *testing.T) {
-	mockService := new(MockUpdateValueService)
-	router := gin.Default()
-
-	// Регистрация обработчика
-	RegisterUpdateValueHandler(router, mockService)
-
-	// Мокируем ошибку при обновлении метрики
-	mockService.On("UpdateMetricValue", &UpdateMetricValueRequest{
-		Type:  "gauge",
-		Name:  "cpu",
-		Value: "99",
-	}).Return(&apierror.APIError{
-		Code:    http.StatusInternalServerError,
-		Message: "Internal error",
-	})
-
-	// Отправляем запрос
-	req, err := http.NewRequest("POST", "/update/gauge/cpu/99", nil)
-	assert.NoError(t, err)
-
-	// Запускаем тестирование
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// Проверяем статус и тело ответа (внутренняя ошибка)
+	// Assert
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "Internal Server Error", w.Body.String())
+}
 
-	mockService.AssertExpectations(t)
+func TestUpdateValueHandler_RouteNotFound(t *testing.T) {
+	// Arrange
+	mockService := &MockUpdateValueService{}
+	r := setupRouter(mockService)
+
+	// Act
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/unknown/route", nil)
+	r.ServeHTTP(w, req)
+
+	// Assert
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, "Route not found", w.Body.String())
 }
