@@ -16,9 +16,7 @@ import (
 // Функция для запуска сервера
 func main() {
 	config := &configs.ServerConfig{}
-	if err := env.Parse(config); err != nil {
-
-	}
+	env.Parse(config)
 
 	// Если переменная окружения не задана, устанавливаем значение по умолчанию
 	if config.Address == "" {
