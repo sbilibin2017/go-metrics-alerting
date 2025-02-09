@@ -58,7 +58,7 @@ func main() {
 
 	// Instantiate the MetricAgentService with the Resty client, the pollInterval, and the reportInterval
 	agentService := &services.MetricAgentService{
-		ApiClient:      client,
+		APIClient:      client,
 		PollInterval:   config.PollInterval,
 		ReportInterval: config.ReportInterval,
 		MetricChannel:  make(chan types.UpdateMetricValueRequest, 100),
