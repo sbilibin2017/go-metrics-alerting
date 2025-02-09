@@ -29,7 +29,7 @@ func TestMetricAgentService_Start_SendingMetrics(t *testing.T) {
 		PollInterval:   1 * time.Second,
 		ReportInterval: 1 * time.Second,
 		Shutdown:       make(chan os.Signal, 1),
-		ApiClient:      resty.New(),
+		APIClient:      resty.New(),
 		Address:        testServer.URL,
 	}
 
@@ -85,7 +85,7 @@ func TestMetricAgentService_Start_ErrorHandling(t *testing.T) {
 		PollInterval:   1 * time.Second,
 		ReportInterval: 1 * time.Second,
 		Shutdown:       make(chan os.Signal, 1),
-		ApiClient:      resty.New(),
+		APIClient:      resty.New(),
 		Address:        testServer.URL,
 	}
 
@@ -124,7 +124,7 @@ func TestMetricAgentService_Shutdown(t *testing.T) {
 		PollInterval:   1 * time.Second,
 		ReportInterval: 1 * time.Second,
 		Shutdown:       make(chan os.Signal, 1),
-		ApiClient:      resty.New(),
+		APIClient:      resty.New(),
 		Address:        testServer.URL,
 	}
 

@@ -15,13 +15,13 @@ import (
 )
 
 // APIClient interface to be mocked
-type APIClient interface {
+type APIClientEngine interface {
 	R() *resty.Request
 }
 
 // MetricAgentService struct
 type MetricAgentService struct {
-	ApiClient      APIClient
+	APIClient      APIClientEngine
 	PollInterval   time.Duration
 	ReportInterval time.Duration
 	MetricChannel  chan types.UpdateMetricValueRequest
@@ -81,7 +81,7 @@ func (s *MetricAgentService) Start() {
 					logger.Logger.Debugf("Sending metric: %s %s = %s", metric.Type, metric.Name, metric.Value)
 
 					// Отправка по пути
-					s.ApiClient.R().Post(fmt.Sprintf("%s/update/%s/%s/%s", s.Address, metric.Type, metric.Name, metric.Value))
+					s.APIClient.R().Post(fmt.Sprintf("%s/update/%s/%s/%s", s.Address, metric.Type, metric.Name, metric.Value))
 
 				default:
 					// Прерываем выполнение текущего цикла, если нет метрик для отправки
