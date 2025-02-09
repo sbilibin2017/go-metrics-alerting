@@ -3,7 +3,7 @@ module go-metrics-alerting
 go 1.21.6
 
 require (
-	github.com/caarlos0/env/v6 v6.10.1
+	github.com/caarlos0/env v3.5.0+incompatible
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-resty/resty/v2 v2.16.5
 	github.com/sirupsen/logrus v1.9.3
