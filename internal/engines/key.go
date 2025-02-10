@@ -1,4 +1,4 @@
-package storage
+package engines
 
 import (
 	"go-metrics-alerting/internal/errors"
