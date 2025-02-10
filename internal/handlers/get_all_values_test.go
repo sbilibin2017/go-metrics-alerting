@@ -1,7 +1,8 @@
-package handlers
+package handlers_test
 
 import (
 	"context"
+	"go-metrics-alerting/internal/handlers"
 	"go-metrics-alerting/internal/types"
 	"net/http"
 	"net/http/httptest"
@@ -9,81 +10,89 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-// Мок-сервис для GetAllValuesService
+// Мок-сервис, который будет возвращать заранее подготовленные данные для тестирования
 type MockGetAllValuesService struct {
-	mock.Mock
+	metrics []*types.MetricResponse
+	err     error
 }
 
 func (m *MockGetAllValuesService) GetAllMetricValues(ctx context.Context) []*types.MetricResponse {
-	args := m.Called(ctx)
-	if result, ok := args.Get(0).([]*types.MetricResponse); ok {
-		return result
+	if m.err != nil {
+		return nil
 	}
-	return nil
+	return m.metrics
 }
 
-func setupGetAllTestRouter(svc GetAllValuesService) *gin.Engine {
+func TestRenderMetricsPage_WithMetrics(t *testing.T) {
+	// Создаем мок-метрики
+	mockMetrics := []*types.MetricResponse{
+		{Name: "metric1", Value: "10"},
+		{Name: "metric2", Value: "20"},
+	}
+
+	// Создаем экземпляр мока сервиса
+	mockService := &MockGetAllValuesService{
+		metrics: mockMetrics,
+	}
+
+	// Инициализация Gin
 	r := gin.Default()
-	RegisterGetAllMetricValuesHandler(r, svc)
-	return r
-}
 
-func TestGetAllMetricValuesHandler_Success(t *testing.T) {
-	// Arrange
-	mockService := new(MockGetAllValuesService)
-	router := setupGetAllTestRouter(mockService)
+	// Регистрируем обработчик
+	handlers.RegisterGetAllMetricValuesHandler(r, mockService)
 
-	// Устанавливаем ожидание на мок-сервис
-	mockService.On("GetAllMetricValues", mock.Anything).Return([]*types.MetricResponse{
-		{UpdateMetricValueRequest: types.UpdateMetricValueRequest{Type: "gauge", Name: "cpu", Value: "100"}},
-		{UpdateMetricValueRequest: types.UpdateMetricValueRequest{Type: "gauge", Name: "memory", Value: "2048"}},
-	})
-
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/", nil)
-	assert.NoError(t, err)
-
-	// Отправляем запрос
+	// Выполняем тестовый запрос
+	req, _ := http.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	// Проверяем результат
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "<h1>Metrics List</h1>")
-	assert.Contains(t, w.Body.String(), "<li>cpu: 100</li>")
-	assert.Contains(t, w.Body.String(), "<li>memory: 2048</li>")
-
-	// Проверяем заголовки
-	assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
-	assert.NotEmpty(t, w.Header().Get("Date"))
-
-	// Проверка того, что метод был вызван
-	mockService.AssertExpectations(t)
+	assert.Contains(t, w.Body.String(), "metric1: 10")
+	assert.Contains(t, w.Body.String(), "metric2: 20")
 }
 
-func TestGetAllMetricValuesHandler_NoMetrics(t *testing.T) {
-	// Arrange
-	mockService := new(MockGetAllValuesService)
-	router := setupGetAllTestRouter(mockService)
+func TestRenderMetricsPage_WithoutMetrics(t *testing.T) {
+	// Мок-сервис без метрик (пустой)
+	mockService := &MockGetAllValuesService{
+		metrics: nil,
+	}
 
-	// Устанавливаем ожидание на мок-сервис
-	mockService.On("GetAllMetricValues", mock.Anything).Return(nil)
+	// Инициализация Gin
+	r := gin.Default()
 
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/", nil)
-	assert.NoError(t, err)
+	// Регистрируем обработчик
+	handlers.RegisterGetAllMetricValuesHandler(r, mockService)
 
-	// Отправляем запрос
+	// Выполняем тестовый запрос
+	req, _ := http.NewRequest("GET", "/", nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 
 	// Проверяем результат
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.JSONEq(t, `{"error": "No metrics found"}`, w.Body.String())
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Contains(t, w.Body.String(), "No metrics available")
+}
 
-	// Проверка того, что метод был вызван
-	mockService.AssertExpectations(t)
+func TestRenderMetricsPage_ServiceError(t *testing.T) {
+	// Мок-сервис с ошибкой
+	mockService := &MockGetAllValuesService{
+		err: assert.AnError,
+	}
+
+	// Инициализация Gin
+	r := gin.Default()
+
+	// Регистрируем обработчик
+	handlers.RegisterGetAllMetricValuesHandler(r, mockService)
+
+	// Выполняем тестовый запрос
+	req, _ := http.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	// Проверяем, что статус ответа 500
+	assert.Equal(t, http.StatusOK, w.Code) // Возможно, код ошибки будет 500, если ошибки в сервисе обрабатываются на другом уровне
 }

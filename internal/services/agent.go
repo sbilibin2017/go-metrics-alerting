@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+
 	"go-metrics-alerting/internal/types"
 	"go-metrics-alerting/pkg/logger"
 	"math/rand"
@@ -49,21 +50,21 @@ func (s *MetricAgentService) Start() {
 			pollCount++
 
 			metrics := []types.UpdateMetricValueRequest{
-				{Type: string(types.Gauge), Name: "Alloc", Value: fmt.Sprintf("%d", ms.Alloc)},
-				{Type: string(types.Gauge), Name: "BuckHashSys", Value: fmt.Sprintf("%d", ms.BuckHashSys)},
-				{Type: string(types.Gauge), Name: "Frees", Value: fmt.Sprintf("%d", ms.Frees)},
-				{Type: string(types.Gauge), Name: "GCCPUFraction", Value: fmt.Sprintf("%f", ms.GCCPUFraction)},
-				{Type: string(types.Gauge), Name: "HeapAlloc", Value: fmt.Sprintf("%d", ms.HeapAlloc)},
-				{Type: string(types.Gauge), Name: "HeapIdle", Value: fmt.Sprintf("%d", ms.HeapIdle)},
-				{Type: string(types.Gauge), Name: "HeapInuse", Value: fmt.Sprintf("%d", ms.HeapInuse)},
-				{Type: string(types.Gauge), Name: "HeapObjects", Value: fmt.Sprintf("%d", ms.HeapObjects)},
-				{Type: string(types.Gauge), Name: "HeapReleased", Value: fmt.Sprintf("%d", ms.HeapReleased)},
-				{Type: string(types.Gauge), Name: "HeapSys", Value: fmt.Sprintf("%d", ms.HeapSys)},
-				{Type: string(types.Gauge), Name: "NumGC", Value: fmt.Sprintf("%d", ms.NumGC)},
-				{Type: string(types.Gauge), Name: "Sys", Value: fmt.Sprintf("%d", ms.Sys)},
-				{Type: string(types.Gauge), Name: "TotalAlloc", Value: fmt.Sprintf("%d", ms.TotalAlloc)},
-				{Type: string(types.Gauge), Name: "RandomValue", Value: fmt.Sprintf("%f", rand.Float64())},
-				{Type: string(types.Counter), Name: "PollCount", Value: fmt.Sprintf("%d", pollCount)},
+				{Type: types.Gauge, Name: "Alloc", Value: fmt.Sprintf("%d", ms.Alloc)},
+				{Type: types.Gauge, Name: "BuckHashSys", Value: fmt.Sprintf("%d", ms.BuckHashSys)},
+				{Type: types.Gauge, Name: "Frees", Value: fmt.Sprintf("%d", ms.Frees)},
+				{Type: types.Gauge, Name: "GCCPUFraction", Value: fmt.Sprintf("%f", ms.GCCPUFraction)},
+				{Type: types.Gauge, Name: "HeapAlloc", Value: fmt.Sprintf("%d", ms.HeapAlloc)},
+				{Type: types.Gauge, Name: "HeapIdle", Value: fmt.Sprintf("%d", ms.HeapIdle)},
+				{Type: types.Gauge, Name: "HeapInuse", Value: fmt.Sprintf("%d", ms.HeapInuse)},
+				{Type: types.Gauge, Name: "HeapObjects", Value: fmt.Sprintf("%d", ms.HeapObjects)},
+				{Type: types.Gauge, Name: "HeapReleased", Value: fmt.Sprintf("%d", ms.HeapReleased)},
+				{Type: types.Gauge, Name: "HeapSys", Value: fmt.Sprintf("%d", ms.HeapSys)},
+				{Type: types.Gauge, Name: "NumGC", Value: fmt.Sprintf("%d", ms.NumGC)},
+				{Type: types.Gauge, Name: "Sys", Value: fmt.Sprintf("%d", ms.Sys)},
+				{Type: types.Gauge, Name: "TotalAlloc", Value: fmt.Sprintf("%d", ms.TotalAlloc)},
+				{Type: types.Gauge, Name: "RandomValue", Value: fmt.Sprintf("%f", rand.Float64())},
+				{Type: types.Counter, Name: "PollCount", Value: fmt.Sprintf("%d", pollCount)},
 			}
 
 			for _, metric := range metrics {

@@ -1,8 +1,9 @@
-package engines
+package storage
 
 import (
 	"context"
 	"go-metrics-alerting/internal/errors"
+	"go-metrics-alerting/internal/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,7 +42,7 @@ func TestMemStorage_Get(t *testing.T) {
 	}{
 		{"metric1", "10", nil},
 		{"metric2", "20", nil},
-		{"metric3", "", errors.ErrValueNotFound},
+		{"metric3", types.EmptyString, errors.ErrValueNotFound}, // Используем EmptyString и ErrValueNotFound
 	}
 
 	for _, test := range tests {
@@ -102,8 +103,8 @@ func TestMemStorage_Set_ContextCanceled(t *testing.T) {
 
 	err := storage.Set(ctx, "metric1", "10")
 
-	// Проверяем, что ошибка соответствует context.Canceled
-	assert.EqualError(t, err, context.Canceled.Error())
+	// Проверяем, что ошибка соответствует ErrContextDone
+	assert.EqualError(t, err, errors.ErrContextDone.Error())
 }
 
 func TestMemStorage_Get_ContextCanceled(t *testing.T) {
@@ -116,8 +117,8 @@ func TestMemStorage_Get_ContextCanceled(t *testing.T) {
 
 	_, err := storage.Get(ctx, "metric1")
 
-	// Проверяем, что ошибка соответствует context.Canceled
-	assert.EqualError(t, err, context.Canceled.Error())
+	// Проверяем, что ошибка соответствует ErrContextDone
+	assert.EqualError(t, err, errors.ErrContextDone.Error())
 }
 
 func TestMemStorage_Generate_ContextCanceled(t *testing.T) {

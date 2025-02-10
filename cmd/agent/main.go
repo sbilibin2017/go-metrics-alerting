@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+
 	"go-metrics-alerting/internal/configs"
 	"go-metrics-alerting/internal/services"
 	"go-metrics-alerting/internal/types"

@@ -2,10 +2,21 @@ package repositories
 
 import (
 	"context"
-	"go-metrics-alerting/internal/types"
+	"errors"
 	"go-metrics-alerting/pkg/logger" // Import the logger package
 
 	"github.com/sirupsen/logrus"
+)
+
+// Константы для работы с метриками и ошибками
+const (
+	EmptyString = "" // Пустая строка
+)
+
+// Ошибки
+var (
+	ErrMetricNotFound  = errors.New("metric not found")     // Ошибка при отсутствии метрики
+	ErrKeyDecodeFailed = errors.New("failed to decode key") // Ошибка при неудаче декодирования ключа
 )
 
 // StorageEngine defines the interface for interacting with data storage.
@@ -75,7 +86,7 @@ func (r *MetricRepository) Get(ctx context.Context, metricType, metricName strin
 			"key":   key,
 			"error": err.Error(),
 		}).Error("Failed to retrieve metric")
-		return types.EmptyString, err
+		return EmptyString, err
 	}
 
 	// Log success

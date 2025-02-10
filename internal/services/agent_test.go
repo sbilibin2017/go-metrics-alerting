@@ -35,17 +35,17 @@ func TestMetricAgentService_Start_SendingMetrics(t *testing.T) {
 
 	// Add a test metric to the channel
 	service.MetricChannel <- types.UpdateMetricValueRequest{
-		Type:  string(types.Gauge),
+		Type:  types.Gauge,
 		Name:  "Alloc",
 		Value: "12345",
 	}
 	service.MetricChannel <- types.UpdateMetricValueRequest{
-		Type:  string(types.Gauge),
+		Type:  types.Gauge,
 		Name:  "BuckHashSys",
 		Value: "1444382",
 	}
 	service.MetricChannel <- types.UpdateMetricValueRequest{
-		Type:  string(types.Gauge),
+		Type:  types.Gauge,
 		Name:  "Frees",
 		Value: "127",
 	}
@@ -91,7 +91,7 @@ func TestMetricAgentService_Start_ErrorHandling(t *testing.T) {
 
 	// Add a test metric to the channel
 	service.MetricChannel <- types.UpdateMetricValueRequest{
-		Type:  string(types.Gauge),
+		Type:  types.Gauge,
 		Name:  "Alloc",
 		Value: "12345",
 	}

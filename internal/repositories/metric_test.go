@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"errors"
-	"go-metrics-alerting/internal/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -138,7 +137,7 @@ func TestMetricRepository_Get_Failure(t *testing.T) {
 
 	// Assert
 	assert.NotNil(t, err)
-	assert.Equal(t, types.EmptyString, result)
+	assert.Equal(t, "", result) // Проверяем, что вернулась пустая строка
 	assert.Equal(t, "storage error", err.Error())
 	mockStorage.AssertExpectations(t)
 	mockKeyEngine.AssertExpectations(t)
