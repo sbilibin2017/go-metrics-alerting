@@ -10,7 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UpdateValueService интерфейс для сервисов обновления метрик.
+// GetValueService интерфейс для получения значения метрики
+type GetValueService interface {
+	GetMetricValue(ctx context.Context, req *types.GetMetricValueRequest) (string, error)
+}
+
+// Валидационные интерфейсы
 type GetValueMetricTypeEmptyStringValidator interface {
 	Validate(metricType string) error
 }
@@ -19,28 +24,36 @@ type GetValueMetricNameEmptyStringValidator interface {
 	Validate(metricName string) error
 }
 
-// Интерфейс для получения значения метрики
-type GetValueService interface {
-	GetMetricValue(ctx context.Context, req *types.GetMetricValueRequest) (string, error)
-}
-
-// UpdateValueHandler структура обработчика с внедрением зависимостей
+// Структура обработчика для получения значения метрики
 type GetValueHandler struct {
 	service             GetValueService
 	metricTypeValidator GetValueMetricTypeEmptyStringValidator
 	metricNameValidator GetValueMetricNameEmptyStringValidator
 }
 
-// Регистрация обработчика для получения значения метрики
-func RegisterGetMetricValueHandler(r *gin.Engine, handler *GetValueHandler) {
+// Регистрация маршрутов для получения значения метрики
+func RegisterGetMetricValueHandler(r *gin.Engine, service GetValueService, metricTypeValidator GetValueMetricTypeEmptyStringValidator, metricNameValidator GetValueMetricNameEmptyStringValidator) {
+	handler := &GetValueHandler{
+		service:             service,
+		metricTypeValidator: metricTypeValidator,
+		metricNameValidator: metricNameValidator,
+	}
+
 	r.RedirectTrailingSlash = false
 
+	// Маршрут для получения значения метрики по типу и имени
 	r.GET("/value/:type/:name", func(c *gin.Context) {
 		handler.getMetricValueHandler(c)
 	})
 
+	// Маршрут для получения значения метрики только по типу
 	r.GET("/value/:type", func(c *gin.Context) {
 		handler.getMetricValueByTypeHandler(c)
+	})
+
+	// Обработчик на случай, если маршрут не найден
+	r.NoRoute(func(c *gin.Context) {
+		c.String(http.StatusNotFound, "Route not found")
 	})
 }
 

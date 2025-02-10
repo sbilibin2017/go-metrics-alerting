@@ -46,14 +46,9 @@ func TestGetMetricValueHandler_ServiceError(t *testing.T) {
 	mockTypeValidator := new(MockMetricTypeValidator)
 	mockNameValidator := new(MockMetricNameValidator)
 
-	handler := &GetValueHandler{
-		service:             mockService,
-		metricTypeValidator: mockTypeValidator,
-		metricNameValidator: mockNameValidator,
-	}
-
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, handler)
+	// Регистрируем обработчик с моками
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
 
 	metricType := "cpu"
 	metricName := "usage"
@@ -88,14 +83,9 @@ func TestGetMetricValueHandler_UnknownError(t *testing.T) {
 	mockTypeValidator := new(MockMetricTypeValidator)
 	mockNameValidator := new(MockMetricNameValidator)
 
-	handler := &GetValueHandler{
-		service:             mockService,
-		metricTypeValidator: mockTypeValidator,
-		metricNameValidator: mockNameValidator,
-	}
-
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, handler)
+	// Регистрируем обработчик с моками
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
 
 	metricType := "cpu"
 	metricName := "usage"
@@ -130,14 +120,9 @@ func TestGetMetricValueHandler_Success(t *testing.T) {
 	mockTypeValidator := new(MockMetricTypeValidator)
 	mockNameValidator := new(MockMetricNameValidator)
 
-	handler := &GetValueHandler{
-		service:             mockService,
-		metricTypeValidator: mockTypeValidator,
-		metricNameValidator: mockNameValidator,
-	}
-
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, handler)
+	// Регистрируем обработчик с моками
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
 
 	metricType := "cpu"
 	metricName := "usage"
@@ -173,14 +158,9 @@ func TestGetMetricValueHandler_TypeValidationError(t *testing.T) {
 	mockTypeValidator := new(MockMetricTypeValidator)
 	mockNameValidator := new(MockMetricNameValidator)
 
-	handler := &GetValueHandler{
-		service:             mockService,
-		metricTypeValidator: mockTypeValidator,
-		metricNameValidator: mockNameValidator,
-	}
-
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, handler)
+	// Регистрируем обработчик с моками
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
 
 	metricType := "invalid"
 	metricName := "usage"
@@ -207,14 +187,9 @@ func TestGetMetricValueHandler_NameValidationError(t *testing.T) {
 	mockTypeValidator := new(MockMetricTypeValidator)
 	mockNameValidator := new(MockMetricNameValidator)
 
-	handler := &GetValueHandler{
-		service:             mockService,
-		metricTypeValidator: mockTypeValidator,
-		metricNameValidator: mockNameValidator,
-	}
-
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, handler)
+	// Регистрируем обработчик с моками
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
 
 	metricType := "cpu"
 	metricName := "invalid"
@@ -242,14 +217,9 @@ func TestGetMetricValueByTypeHandler_Success(t *testing.T) {
 	mockTypeValidator := new(MockMetricTypeValidator)
 	mockNameValidator := new(MockMetricNameValidator)
 
-	handler := &GetValueHandler{
-		service:             mockService,
-		metricTypeValidator: mockTypeValidator,
-		metricNameValidator: mockNameValidator,
-	}
-
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, handler)
+	// Регистрируем обработчик с моками
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
 
 	metricType := "cpu"
 	metricValue := "1024"
@@ -282,14 +252,9 @@ func TestGetMetricValueByTypeHandler_TypeValidationError(t *testing.T) {
 	mockTypeValidator := new(MockMetricTypeValidator)
 	mockNameValidator := new(MockMetricNameValidator)
 
-	handler := &GetValueHandler{
-		service:             mockService,
-		metricTypeValidator: mockTypeValidator,
-		metricNameValidator: mockNameValidator,
-	}
-
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, handler)
+	// Регистрируем обработчик с моками
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
 
 	metricType := "invalid"
 
@@ -315,14 +280,9 @@ func TestGetMetricValueByTypeHandler_ServiceError(t *testing.T) {
 	mockTypeValidator := new(MockMetricTypeValidator)
 	mockNameValidator := new(MockMetricNameValidator)
 
-	handler := &GetValueHandler{
-		service:             mockService,
-		metricTypeValidator: mockTypeValidator,
-		metricNameValidator: mockNameValidator,
-	}
-
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, handler)
+	// Регистрируем обработчик с моками
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
 
 	metricType := "cpu"
 
@@ -347,4 +307,28 @@ func TestGetMetricValueByTypeHandler_ServiceError(t *testing.T) {
 	mockTypeValidator.AssertExpectations(t)
 	mockNameValidator.AssertExpectations(t)
 	mockService.AssertExpectations(t)
+}
+
+func TestGetNoRouteHandler(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Моки для валидаторов и сервиса
+	mockService := new(MockGetValueService)
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
+
+	// Настройка маршрута и регистрация обработчика с моками
+	r := gin.Default()
+	RegisterGetMetricValueHandler(r, mockService, mockTypeValidator, mockNameValidator)
+
+	// Запрос на несуществующий маршрут
+	req, _ := http.NewRequest(http.MethodGet, "/nonexistent-route", nil)
+	w := httptest.NewRecorder()
+
+	// Запускаем обработчик
+	r.ServeHTTP(w, req)
+
+	// Проверка ответа: код 404 и сообщение "Route not found"
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Equal(t, "Route not found", w.Body.String())
 }

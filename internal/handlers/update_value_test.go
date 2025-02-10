@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"errors"
+	"go-metrics-alerting/internal/types"
+	"go-metrics-alerting/pkg/apierror"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,13 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-
-	"go-metrics-alerting/internal/types"
-	"go-metrics-alerting/pkg/apierror"
 )
 
-// Mock сервис
-
+// Мокаем интерфейс UpdateValueService
 type MockUpdateValueService struct {
 	mock.Mock
 }
@@ -26,8 +24,7 @@ func (m *MockUpdateValueService) UpdateMetricValue(ctx context.Context, req *typ
 	return args.Error(0)
 }
 
-// Mock валидаторов
-
+// Мокаем интерфейсы валидаторов
 type MockValidator struct {
 	mock.Mock
 }
@@ -37,202 +34,295 @@ func (m *MockValidator) Validate(value string) error {
 	return args.Error(0)
 }
 
-func setupHandler() (*UpdateValueHandler, *gin.Engine, *MockUpdateValueService, *MockValidator, *MockValidator, *MockValidator, *MockValidator, *MockValidator) {
-	gin.SetMode(gin.TestMode)
+func setupMocks() (*MockUpdateValueService, *MockValidator, *MockValidator, *MockValidator, *MockValidator, *MockValidator) {
+	// Создаем моки для сервисов и валидаторов
+	mockService := new(MockUpdateValueService)
+	mockMetricTypeValidator := new(MockValidator)
+	mockMetricNameValidator := new(MockValidator)
+	mockMetricValueValidator := new(MockValidator)
+	mockGaugeValueValidator := new(MockValidator)
+	mockCounterValueValidator := new(MockValidator)
 
-	service := new(MockUpdateValueService)
-	typeValidator := new(MockValidator)
-	nameValidator := new(MockValidator)
-	valueValidator := new(MockValidator)
-	gaugeValidator := new(MockValidator)
-	counterValidator := new(MockValidator)
-
-	h := &UpdateValueHandler{
-		service:               service,
-		metricTypeValidator:   typeValidator,
-		metricNameValidator:   nameValidator,
-		metricValueValidator:  valueValidator,
-		gaugeValueValidator:   gaugeValidator,
-		counterValueValidator: counterValidator,
-	}
-
-	r := gin.Default()
-	h.RegisterRoutes(r)
-
-	return h, r, service, typeValidator, nameValidator, valueValidator, gaugeValidator, counterValidator
+	return mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator
 }
 
-func TestSuccessfulMetricUpdate(t *testing.T) {
-	_, r, service, typeValidator, nameValidator, valueValidator, gaugeValidator, _ := setupHandler()
+func TestValidRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настроим тестируемые моки
+	mockMetricTypeValidator.On("Validate", "gauge").Return(nil)
+	mockMetricNameValidator.On("Validate", "metric1").Return(nil)
+	mockMetricValueValidator.On("Validate", "10.5").Return(nil)
+	mockGaugeValueValidator.On("Validate", "10.5").Return(nil)
+	mockService.On("UpdateMetricValue", mock.Anything, mock.Anything).Return(nil)
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/metric1/10.5", nil)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/cpu/42", nil)
+	router.ServeHTTP(w, req)
 
-	typeValidator.On("Validate", "gauge").Return(nil)
-	nameValidator.On("Validate", "cpu").Return(nil)
-	valueValidator.On("Validate", "42").Return(nil)
-	gaugeValidator.On("Validate", "42").Return(nil)
-	service.On("UpdateMetricValue", mock.Anything, mock.Anything).Return(nil)
-
-	r.ServeHTTP(w, req)
-
+	// Проверяем статус и ответ
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "Metric updated", w.Body.String())
 }
 
 func TestInvalidMetricType(t *testing.T) {
-	_, r, _, typeValidator, _, _, _, _ := setupHandler()
+	gin.SetMode(gin.TestMode)
 
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настроим тестируемые моки
+	mockMetricTypeValidator.On("Validate", "invalid_type").Return(errors.New("Invalid metric type"))
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	req, _ := http.NewRequest(http.MethodPost, "/update/invalid_type/metric1/10.5", nil)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/update/invalid/cpu/42", nil)
+	router.ServeHTTP(w, req)
 
-	typeValidator.On("Validate", "invalid").Return(errors.New("invalid type"))
-
-	r.ServeHTTP(w, req)
-
+	// Проверяем статус и ответ
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, "invalid type", w.Body.String())
+	assert.Equal(t, "Invalid metric type", w.Body.String())
 }
 
-func TestServiceError(t *testing.T) {
-	_, r, service, typeValidator, nameValidator, valueValidator, gaugeValidator, _ := setupHandler()
+func TestInvalidMetricName(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настроим тестируемые моки
+	mockMetricTypeValidator.On("Validate", "gauge").Return(nil)
+	mockMetricNameValidator.On("Validate", "invalid_metric").Return(errors.New("Invalid metric name"))
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/invalid_metric/10.5", nil)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/cpu/42", nil)
+	router.ServeHTTP(w, req)
 
-	typeValidator.On("Validate", "gauge").Return(nil)
-	nameValidator.On("Validate", "cpu").Return(nil)
-	valueValidator.On("Validate", "42").Return(nil)
-	gaugeValidator.On("Validate", "42").Return(nil)
-	service.On("UpdateMetricValue", mock.Anything, mock.Anything).Return(&apierror.APIError{Code: http.StatusInternalServerError, Message: "error updating metric"})
-
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, "error updating metric", w.Body.String())
-}
-
-func TestMetricNameValidationError(t *testing.T) {
-	// Настройка теста
-	_, r, _, typeValidator, nameValidator, valueValidator, gaugeValidator, _ := setupHandler()
-
-	// Мокаем ошибку для имени метрики
-	nameValidator.On("Validate", "cpu").Return(errors.New("invalid metric name"))
-
-	// Мокаем успешную валидацию для других валидаторов
-	typeValidator.On("Validate", "gauge").Return(nil)
-	valueValidator.On("Validate", "42").Return(nil)
-	gaugeValidator.On("Validate", "42").Return(nil)
-
-	// Выполняем HTTP запрос
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/cpu/42", nil)
-
-	// Запускаем запрос через маршруты
-	r.ServeHTTP(w, req)
-
-	// Проверяем, что мы получаем код ошибки 404 и правильное сообщение
+	// Проверяем статус и ответ
 	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Equal(t, "invalid metric name", w.Body.String())
+	assert.Equal(t, "Invalid metric name", w.Body.String())
 }
 
-func TestMetricValueValidationError(t *testing.T) {
-	// Настройка теста
-	_, r, _, typeValidator, nameValidator, valueValidator, gaugeValidator, _ := setupHandler()
+func TestInvalidMetricValue(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
-	// Мокаем успешную валидацию для типа метрики и имени метрики
-	typeValidator.On("Validate", "gauge").Return(nil)
-	nameValidator.On("Validate", "cpu").Return(nil)
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
 
-	// Мокаем ошибку валидации для значения метрики
-	valueValidator.On("Validate", "invalid_value").Return(errors.New("invalid metric value"))
-	gaugeValidator.On("Validate", "invalid_value").Return(nil)
+	// Настроим тестируемые моки
+	mockMetricTypeValidator.On("Validate", "gauge").Return(nil)
+	mockMetricNameValidator.On("Validate", "metric1").Return(nil)
+	mockMetricValueValidator.On("Validate", "invalid_value").Return(errors.New("Invalid metric value"))
 
-	// Выполняем HTTP запрос
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/metric1/invalid_value", nil)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/cpu/invalid_value", nil)
+	router.ServeHTTP(w, req)
 
-	// Запускаем запрос через маршруты
-	r.ServeHTTP(w, req)
-
-	// Проверяем, что мы получаем код ошибки 400 и правильное сообщение
+	// Проверяем статус и ответ
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, "invalid metric value", w.Body.String())
+	assert.Equal(t, "Invalid metric value", w.Body.String())
 }
 
-func TestGaugeValueValidationError(t *testing.T) {
-	_, r, _, typeValidator, nameValidator, valueValidator, gaugeValidator, _ := setupHandler()
+// Тест на ошибку сервиса
+func TestServiceError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
+	// Настроим моки
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настроим, что будет происходить при вызове метода UpdateMetricValue
+	mockMetricTypeValidator.On("Validate", "gauge").Return(nil)
+	mockMetricNameValidator.On("Validate", "metric1").Return(nil)
+	mockMetricValueValidator.On("Validate", "10.5").Return(nil)
+	mockGaugeValueValidator.On("Validate", "10.5").Return(nil)
+	mockService.On("UpdateMetricValue", mock.Anything, mock.Anything).Return(&apierror.APIError{
+		Code:    http.StatusInternalServerError,
+		Message: "Internal Server Error",
+	})
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	// Выполнение запроса
+	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/metric1/10.5", nil)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/cpu/invalid_value", nil)
+	router.ServeHTTP(w, req)
 
-	// Мокаем ошибку валидации для типа метрики "gauge"
-	typeValidator.On("Validate", "gauge").Return(nil)
-	nameValidator.On("Validate", "cpu").Return(nil)
-	valueValidator.On("Validate", "invalid_value").Return(nil)
-	gaugeValidator.On("Validate", "invalid_value").Return(errors.New("invalid gauge value"))
-
-	r.ServeHTTP(w, req)
-
-	// Проверка на ошибку с кодом 400 и сообщением ошибки
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, "invalid gauge value", w.Body.String())
+	// Проверка ответа
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "Internal Server Error", w.Body.String())
 }
 
-func TestCounterValueValidationError(t *testing.T) {
-	_, r, _, typeValidator, nameValidator, valueValidator, _, counterValidator := setupHandler()
+func TestInternalServerError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
+	// Настроим моки
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настроим, что будет происходить при вызове метода UpdateMetricValue
+	mockMetricTypeValidator.On("Validate", "gauge").Return(nil)
+	mockMetricNameValidator.On("Validate", "metric1").Return(nil)
+	mockMetricValueValidator.On("Validate", "10.5").Return(nil)
+	mockGaugeValueValidator.On("Validate", "10.5").Return(nil)
+
+	// Настроим, что сервис вызывает обычную ошибку (не APIError)
+	mockService.On("UpdateMetricValue", mock.Anything, mock.Anything).Return(errors.New("Unexpected error"))
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	// Выполнение запроса
+	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/metric1/10.5", nil)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/update/counter/cpu/42", nil)
+	router.ServeHTTP(w, req)
 
-	// Мокаем ошибку валидации для типа метрики "counter"
-	typeValidator.On("Validate", "counter").Return(nil)
-	nameValidator.On("Validate", "cpu").Return(nil)
-	valueValidator.On("Validate", "42").Return(nil)
-	counterValidator.On("Validate", "42").Return(errors.New("invalid counter value"))
+	// Проверка ответа
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "Internal Server Error", w.Body.String())
+}
 
-	r.ServeHTTP(w, req)
+func TestGaugeValidationError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
 
-	// Проверка на ошибку с кодом 400 и сообщением ошибки
+	// Настроим моки
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настроим, что будет происходить при вызове метода UpdateMetricValue
+	mockMetricTypeValidator.On("Validate", "gauge").Return(nil)
+	mockMetricNameValidator.On("Validate", "metric1").Return(nil)
+	mockMetricValueValidator.On("Validate", "10.5").Return(nil)
+
+	// Настроим, что валидация для Gauge возвращает ошибку
+	mockGaugeValueValidator.On("Validate", "10.5").Return(errors.New("Invalid Gauge value"))
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	// Выполнение запроса
+	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/metric1/10.5", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Проверка ответа
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, "invalid counter value", w.Body.String())
+	assert.Equal(t, "Invalid Gauge value", w.Body.String())
+}
+
+func TestCounterValidationError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Настроим моки
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настроим, что будет происходить при вызове метода UpdateMetricValue
+	mockMetricTypeValidator.On("Validate", "counter").Return(nil)
+	mockMetricNameValidator.On("Validate", "metric1").Return(nil)
+	mockMetricValueValidator.On("Validate", "10.5").Return(nil)
+
+	// Настроим, что валидация для Counter возвращает ошибку
+	mockCounterValueValidator.On("Validate", "10.5").Return(errors.New("Invalid Counter value"))
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	// Выполнение запроса
+	req, _ := http.NewRequest(http.MethodPost, "/update/counter/metric1/10.5", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Проверка ответа
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "Invalid Counter value", w.Body.String())
 }
 
 func TestNoRouteHandler(t *testing.T) {
-	_, r, _, _, _, _, _, _ := setupHandler()
+	gin.SetMode(gin.TestMode)
 
-	// Создаём запрос на несуществующий маршрут
+	// Настройка моки для всех валидаторов (можно оставить как заглушки)
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	// Выполнение запроса на несуществующий маршрут
+	req, _ := http.NewRequest(http.MethodGet, "/nonexistent-route", nil)
 	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodGet, "/nonexistent/route", nil)
+	router.ServeHTTP(w, req)
 
-	// Запускаем запрос через маршруты
-	r.ServeHTTP(w, req)
-
-	// Проверяем, что мы получаем код ошибки 404 и правильное сообщение
+	// Проверка, что сервер вернул код 404 и сообщение "Route not found"
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Equal(t, "Route not found", w.Body.String())
-}
-
-func TestServiceInternalError(t *testing.T) {
-	_, r, service, typeValidator, nameValidator, valueValidator, gaugeValidator, _ := setupHandler()
-
-	// Создаём запрос для обновления метрики
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest(http.MethodPost, "/update/gauge/cpu/42", nil)
-
-	// Настроим моки для валидаторов
-	typeValidator.On("Validate", "gauge").Return(nil)
-	nameValidator.On("Validate", "cpu").Return(nil)
-	valueValidator.On("Validate", "42").Return(nil)
-	gaugeValidator.On("Validate", "42").Return(nil)
-
-	// Настроим мок сервиса, чтобы он возвращал ошибку
-	service.On("UpdateMetricValue", mock.Anything, mock.Anything).Return(errors.New("service error"))
-
-	// Запускаем запрос
-	r.ServeHTTP(w, req)
-
-	// Проверяем, что получен статус 500 и правильное сообщение
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, "Internal Server Error", w.Body.String())
 }

@@ -2,10 +2,10 @@ package main
 
 import (
 	"flag"
-	"go-metrics-alerting/internal/configs"
-	"go-metrics-alerting/internal/handlers/metric/types"
-	"go-metrics-alerting/internal/services/metricagent"
 
+	"go-metrics-alerting/internal/configs"
+	"go-metrics-alerting/internal/services"
+	"go-metrics-alerting/internal/types"
 	"go-metrics-alerting/pkg/logger"
 	"os"
 	"time"
@@ -58,7 +58,7 @@ func main() {
 	client := resty.New()
 
 	// Instantiate the MetricAgentService with the Resty client, the pollInterval, and the reportInterval
-	agentService := &metricagent.MetricAgentService{
+	agentService := &services.MetricAgentService{
 		APIClient:      client,
 		PollInterval:   config.PollInterval,
 		ReportInterval: config.ReportInterval,

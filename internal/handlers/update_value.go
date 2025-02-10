@@ -10,8 +10,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Валидационные интерфейсы
+// Сервис обновления метрики
+type UpdateValueService interface {
+	UpdateMetricValue(ctx context.Context, req *types.UpdateMetricValueRequest) error
+}
 
+// Валидационные интерфейсы
 type UpdateValueMetricTypeValidator interface {
 	Validate(metricType string) error
 }
@@ -32,11 +36,6 @@ type UpdateValueMetricCounterValidator interface {
 	Validate(metricValue string) error
 }
 
-// Сервис обновления метрики
-type UpdateValueService interface {
-	UpdateMetricValue(ctx context.Context, req *types.UpdateMetricValueRequest) error
-}
-
 // Структура обработчика для обновления метрики
 type UpdateValueHandler struct {
 	service               UpdateValueService
@@ -47,10 +46,32 @@ type UpdateValueHandler struct {
 	counterValueValidator UpdateValueMetricCounterValidator
 }
 
-// Регистрация маршрутов
-func (h *UpdateValueHandler) RegisterRoutes(r *gin.Engine) {
+// Регистрация маршрутов для обновления метрики
+func RegisterUpdateMetricValueHandler(r *gin.Engine, service UpdateValueService,
+	metricTypeValidator UpdateValueMetricTypeValidator,
+	metricNameValidator UpdateValueMetricNameValidator,
+	metricValueValidator UpdateValueMetricValueValidator,
+	gaugeValueValidator UpdateValueMetricGaugeValidator,
+	counterValueValidator UpdateValueMetricCounterValidator,
+) {
+
+	handler := &UpdateValueHandler{
+		service:               service,
+		metricTypeValidator:   metricTypeValidator,
+		metricNameValidator:   metricNameValidator,
+		metricValueValidator:  metricValueValidator,
+		gaugeValueValidator:   gaugeValueValidator,
+		counterValueValidator: counterValueValidator,
+	}
+
 	r.RedirectTrailingSlash = false
-	r.POST("/update/:type/:name/:value", h.updateValueHandler)
+
+	// Маршрут для обновления метрики с типом, именем и значением
+	r.POST("/update/:type/:name/:value", func(c *gin.Context) {
+		handler.updateValueHandler(c)
+	})
+
+	// Обработчик на случай, если маршрут не найден
 	r.NoRoute(func(c *gin.Context) {
 		c.String(http.StatusNotFound, "Route not found")
 	})
@@ -103,17 +124,20 @@ func (h *UpdateValueHandler) updateValueHandler(c *gin.Context) {
 	}
 
 	// Обновляем метрику через сервис
-	if err := h.service.UpdateMetricValue(c, updateRequest); err != nil {
+	err := h.service.UpdateMetricValue(c, updateRequest)
+	if err != nil {
+		// Если ошибка типа *apierror.APIError, используем ее код и сообщение
 		if apiErr, ok := err.(*apierror.APIError); ok {
 			c.String(apiErr.Code, apiErr.Message) // Ошибка API
 			return
 		}
-		c.String(http.StatusInternalServerError, "Internal Server Error") // Внутренняя ошибка сервера
+		// Внутренняя ошибка сервера
+		c.String(http.StatusInternalServerError, "Internal Server Error")
 		return
 	}
 
 	// Успешный ответ
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.Header("Date", time.Now().UTC().Format(time.RFC1123))
-	c.String(http.StatusOK, "Metric updated")
+	c.String(http.StatusOK, "Metric updated") // Gin сам установит Content-Length
 }
