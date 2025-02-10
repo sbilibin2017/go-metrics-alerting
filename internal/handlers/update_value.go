@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"go-metrics-alerting/internal/errors"
 	"go-metrics-alerting/internal/types"
 	"go-metrics-alerting/pkg/apierror"
 	"net/http"
@@ -85,6 +86,7 @@ func (h *UpdateValueHandler) updateValueHandler(c *gin.Context) {
 
 	// Применяем валидатор типа метрики
 	if err := h.metricTypeValidator.Validate(metricType); err != nil {
+		// Вернуть ошибку 400, если тип метрики невалиден
 		c.String(http.StatusBadRequest, err.Error()) // Ошибка типа метрики
 		return
 	}
@@ -114,6 +116,10 @@ func (h *UpdateValueHandler) updateValueHandler(c *gin.Context) {
 			c.String(http.StatusBadRequest, err.Error()) // Ошибка для Counter
 			return
 		}
+	default:
+		// Если тип метрики неизвестен, возвращаем ошибку 400 с описанием
+		c.String(http.StatusBadRequest, errors.ErrUnsupportedMetricType.Error())
+		return
 	}
 
 	// Подготовка запроса для обновления метрики

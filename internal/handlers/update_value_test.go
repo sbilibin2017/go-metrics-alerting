@@ -326,3 +326,32 @@ func TestNoRouteHandler(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Equal(t, "Route not found", w.Body.String())
 }
+
+func TestUnknownMetricType(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	// Настроим моки
+	mockService, mockMetricTypeValidator, mockMetricNameValidator, mockMetricValueValidator, mockGaugeValueValidator, mockCounterValueValidator := setupMocks()
+
+	// Настроим, что будет происходить при вызове метода Validate
+	mockMetricTypeValidator.On("Validate", "unknown_type").Return(errors.New("Unsupported metric type"))
+
+	// Настройка роутинга
+	router := gin.Default()
+	RegisterUpdateMetricValueHandler(router, mockService,
+		mockMetricTypeValidator,
+		mockMetricNameValidator,
+		mockMetricValueValidator,
+		mockGaugeValueValidator,
+		mockCounterValueValidator,
+	)
+
+	// Выполнение запроса с неизвестным типом метрики
+	req, _ := http.NewRequest(http.MethodPost, "/update/unknown_type/metric1/10.5", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Проверка ответа
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "Unsupported metric type", w.Body.String()) // Сообщение об ошибке
+}
