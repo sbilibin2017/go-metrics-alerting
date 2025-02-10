@@ -4,10 +4,10 @@ import (
 	"flag"
 
 	"go-metrics-alerting/internal/configs"
+	"go-metrics-alerting/internal/engines"
 	"go-metrics-alerting/internal/handlers"
 	"go-metrics-alerting/internal/repositories"
 	"go-metrics-alerting/internal/services"
-	"go-metrics-alerting/internal/storage"
 	"go-metrics-alerting/internal/validators"
 	"go-metrics-alerting/pkg/logger"
 
@@ -43,10 +43,10 @@ func main() {
 	r.RedirectTrailingSlash = false
 
 	// Создаем хранилище данных (в данном случае это память, но может быть база данных)
-	storageEngine := &storage.StorageEngine{}
+	storageEngine := &engines.StorageEngine{}
 
 	// Создаем обработчик ключей для хранилища
-	keyEngine := &storage.KeyEngine{}
+	keyEngine := &engines.KeyEngine{}
 
 	// Создаем репозиторий для метрик
 	metricRepository := &repositories.MetricRepository{
