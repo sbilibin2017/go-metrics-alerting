@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"go-metrics-alerting/internal/types"
 	"go-metrics-alerting/pkg/apierror"
 	"net/http"
@@ -14,7 +13,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// Мок-сервис для GetValueService
+// Моки для валидаторов и сервиса
 type MockGetValueService struct {
 	mock.Mock
 }
@@ -24,207 +23,328 @@ func (m *MockGetValueService) GetMetricValue(ctx context.Context, req *types.Get
 	return args.String(0), args.Error(1)
 }
 
-func setupTestRouter(svc GetValueService) *gin.Engine {
+type MockMetricTypeValidator struct {
+	mock.Mock
+}
+
+func (m *MockMetricTypeValidator) Validate(metricType string) error {
+	args := m.Called(metricType)
+	return args.Error(0)
+}
+
+type MockMetricNameValidator struct {
+	mock.Mock
+}
+
+func (m *MockMetricNameValidator) Validate(metricName string) error {
+	args := m.Called(metricName)
+	return args.Error(0)
+}
+
+func TestGetMetricValueHandler_ServiceError(t *testing.T) {
+	mockService := new(MockGetValueService)
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
+
+	handler := &GetValueHandler{
+		service:             mockService,
+		metricTypeValidator: mockTypeValidator,
+		metricNameValidator: mockNameValidator,
+	}
+
 	r := gin.Default()
-	RegisterGetMetricValueHandler(r, svc)
-	return r
-}
+	RegisterGetMetricValueHandler(r, handler)
 
-func TestGetMetricValueHandler_Success(t *testing.T) {
-	// Arrange
-	mockService := new(MockGetValueService)
-	router := setupTestRouter(mockService)
+	metricType := "cpu"
+	metricName := "usage"
 
-	// Устанавливаем ожидание на мок-сервис
+	// Мокаем валидаторы
+	mockTypeValidator.On("Validate", metricType).Return(nil).Once()
+	mockNameValidator.On("Validate", metricName).Return(nil).Once()
+
+	// Мокаем ошибку в сервисе (например, APIError)
 	mockService.On("GetMetricValue", mock.Anything, &types.GetMetricValueRequest{
-		Type: "gauge",
-		Name: "cpu",
-	}).Return("100", nil)
+		Type: metricType,
+		Name: metricName,
+	}).Return("", &apierror.APIError{Code: http.StatusInternalServerError, Message: "Service error occurred"}).Once()
 
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/value/gauge/cpu", nil)
-	assert.NoError(t, err)
-
-	// Отправляем запрос
+	req, _ := http.NewRequest(http.MethodGet, "/value/"+metricType+"/"+metricName, nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
 
-	// Проверяем результат
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "100", w.Body.String())
-	assert.Equal(t, "text/plain; charset=utf-8", w.Header().Get("Content-Type"))
-	assert.NotEmpty(t, w.Header().Get("Date"))
+	r.ServeHTTP(w, req)
 
-	// Проверка того, что метод был вызван
+	// Проверка результата: ошибка от APIError
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, "Service error occurred", w.Body.String())
+
+	// Проверка вызовов моков
+	mockTypeValidator.AssertExpectations(t)
+	mockNameValidator.AssertExpectations(t)
 	mockService.AssertExpectations(t)
 }
 
-func TestGetMetricValueHandler_NotFound(t *testing.T) {
-	// Arrange
+func TestGetMetricValueHandler_UnknownError(t *testing.T) {
 	mockService := new(MockGetValueService)
-	router := setupTestRouter(mockService)
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
 
-	// Устанавливаем ожидание на мок-сервис
+	handler := &GetValueHandler{
+		service:             mockService,
+		metricTypeValidator: mockTypeValidator,
+		metricNameValidator: mockNameValidator,
+	}
+
+	r := gin.Default()
+	RegisterGetMetricValueHandler(r, handler)
+
+	metricType := "cpu"
+	metricName := "usage"
+
+	// Мокаем валидаторы
+	mockTypeValidator.On("Validate", metricType).Return(nil).Once()
+	mockNameValidator.On("Validate", metricName).Return(nil).Once()
+
+	// Мокаем ошибку в сервисе, которая не является APIError (например, другая ошибка)
 	mockService.On("GetMetricValue", mock.Anything, &types.GetMetricValueRequest{
-		Type: "gauge",
-		Name: "cpu",
-	}).Return("", &apierror.APIError{
-		Code:    http.StatusNotFound,
-		Message: "Metric not found",
-	})
+		Type: metricType,
+		Name: metricName,
+	}).Return("", assert.AnError).Once() // используем стандартную ошибку
 
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/value/gauge/cpu", nil)
-	assert.NoError(t, err)
-
-	// Отправляем запрос
+	req, _ := http.NewRequest(http.MethodGet, "/value/"+metricType+"/"+metricName, nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
 
-	// Проверяем результат
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Equal(t, "Metric not found", w.Body.String())
+	r.ServeHTTP(w, req)
 
-	// Проверка того, что метод был вызван
-	mockService.AssertExpectations(t)
-}
-
-func TestGetMetricValueHandler_InternalServerError(t *testing.T) {
-	// Arrange
-	mockService := new(MockGetValueService)
-	router := setupTestRouter(mockService)
-
-	// Устанавливаем ожидание на мок-сервис
-	mockService.On("GetMetricValue", mock.Anything, &types.GetMetricValueRequest{
-		Type: "gauge",
-		Name: "cpu",
-	}).Return("", errors.New("internal error"))
-
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/value/gauge/cpu", nil)
-	assert.NoError(t, err)
-
-	// Отправляем запрос
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// Проверяем результат
+	// Проверка результата: ошибка 500 с сообщением "Internal Server Error"
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	assert.Equal(t, "Internal Server Error", w.Body.String())
 
-	// Проверка того, что метод был вызван
+	// Проверка вызовов моков
+	mockTypeValidator.AssertExpectations(t)
+	mockNameValidator.AssertExpectations(t)
+	mockService.AssertExpectations(t)
+}
+
+func TestGetMetricValueHandler_Success(t *testing.T) {
+	mockService := new(MockGetValueService)
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
+
+	handler := &GetValueHandler{
+		service:             mockService,
+		metricTypeValidator: mockTypeValidator,
+		metricNameValidator: mockNameValidator,
+	}
+
+	r := gin.Default()
+	RegisterGetMetricValueHandler(r, handler)
+
+	metricType := "cpu"
+	metricName := "usage"
+	metricValue := "75"
+
+	// Мокаем валидаторы
+	mockTypeValidator.On("Validate", metricType).Return(nil).Once()
+	mockNameValidator.On("Validate", metricName).Return(nil).Once()
+
+	// Мокаем сервис
+	mockService.On("GetMetricValue", mock.Anything, &types.GetMetricValueRequest{
+		Type: metricType,
+		Name: metricName,
+	}).Return(metricValue, nil).Once()
+
+	req, _ := http.NewRequest(http.MethodGet, "/value/"+metricType+"/"+metricName, nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	// Проверка результата
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, metricValue, w.Body.String())
+
+	// Проверка вызовов моков
+	mockTypeValidator.AssertExpectations(t)
+	mockNameValidator.AssertExpectations(t)
+	mockService.AssertExpectations(t)
+}
+
+func TestGetMetricValueHandler_TypeValidationError(t *testing.T) {
+	mockService := new(MockGetValueService)
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
+
+	handler := &GetValueHandler{
+		service:             mockService,
+		metricTypeValidator: mockTypeValidator,
+		metricNameValidator: mockNameValidator,
+	}
+
+	r := gin.Default()
+	RegisterGetMetricValueHandler(r, handler)
+
+	metricType := "invalid"
+	metricName := "usage"
+
+	// Мокаем валидатор
+	mockTypeValidator.On("Validate", metricType).Return(assert.AnError).Once()
+
+	req, _ := http.NewRequest(http.MethodGet, "/value/"+metricType+"/"+metricName, nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	// Проверка результата
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Проверка вызовов моков
+	mockTypeValidator.AssertExpectations(t)
+	mockNameValidator.AssertExpectations(t)
+	mockService.AssertExpectations(t)
+}
+
+func TestGetMetricValueHandler_NameValidationError(t *testing.T) {
+	mockService := new(MockGetValueService)
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
+
+	handler := &GetValueHandler{
+		service:             mockService,
+		metricTypeValidator: mockTypeValidator,
+		metricNameValidator: mockNameValidator,
+	}
+
+	r := gin.Default()
+	RegisterGetMetricValueHandler(r, handler)
+
+	metricType := "cpu"
+	metricName := "invalid"
+
+	// Мокаем валидаторы
+	mockTypeValidator.On("Validate", metricType).Return(nil).Once()
+	mockNameValidator.On("Validate", metricName).Return(assert.AnError).Once()
+
+	req, _ := http.NewRequest(http.MethodGet, "/value/"+metricType+"/"+metricName, nil)
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	// Проверка результата
+	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	// Проверка вызовов моков
+	mockTypeValidator.AssertExpectations(t)
+	mockNameValidator.AssertExpectations(t)
 	mockService.AssertExpectations(t)
 }
 
 func TestGetMetricValueByTypeHandler_Success(t *testing.T) {
-	// Arrange
 	mockService := new(MockGetValueService)
-	router := setupTestRouter(mockService)
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
 
-	// Устанавливаем ожидание на мок-сервис
+	handler := &GetValueHandler{
+		service:             mockService,
+		metricTypeValidator: mockTypeValidator,
+		metricNameValidator: mockNameValidator,
+	}
+
+	r := gin.Default()
+	RegisterGetMetricValueHandler(r, handler)
+
+	metricType := "cpu"
+	metricValue := "1024"
+
+	// Мокаем валидатор
+	mockTypeValidator.On("Validate", metricType).Return(nil).Once()
+
+	// Мокаем сервис
 	mockService.On("GetMetricValue", mock.Anything, &types.GetMetricValueRequest{
-		Type: "counter",
-	}).Return("200", nil)
+		Type: metricType,
+	}).Return(metricValue, nil).Once()
 
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/value/counter", nil)
-	assert.NoError(t, err)
-
-	// Отправляем запрос
+	req, _ := http.NewRequest(http.MethodGet, "/value/"+metricType, nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
 
-	// Проверяем результат
+	r.ServeHTTP(w, req)
+
+	// Проверка результата
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "200", w.Body.String())
+	assert.Equal(t, metricValue, w.Body.String())
 
-	// Проверка того, что метод был вызван
+	// Проверка вызовов моков
+	mockTypeValidator.AssertExpectations(t)
+	mockNameValidator.AssertExpectations(t)
 	mockService.AssertExpectations(t)
 }
 
-func TestGetMetricValueByTypeHandler_InternalServerError(t *testing.T) {
-	// Arrange
+func TestGetMetricValueByTypeHandler_TypeValidationError(t *testing.T) {
 	mockService := new(MockGetValueService)
-	router := setupTestRouter(mockService)
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
 
-	// Устанавливаем ожидание на мок-сервис
-	mockService.On("GetMetricValue", mock.Anything, &types.GetMetricValueRequest{
-		Type: "error",
-	}).Return("", errors.New("internal error"))
+	handler := &GetValueHandler{
+		service:             mockService,
+		metricTypeValidator: mockTypeValidator,
+		metricNameValidator: mockNameValidator,
+	}
 
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/value/error", nil)
-	assert.NoError(t, err)
+	r := gin.Default()
+	RegisterGetMetricValueHandler(r, handler)
 
-	// Отправляем запрос
+	metricType := "invalid"
+
+	// Мокаем валидатор
+	mockTypeValidator.On("Validate", metricType).Return(assert.AnError).Once()
+
+	req, _ := http.NewRequest(http.MethodGet, "/value/"+metricType, nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
 
-	// Проверяем результат
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, "Internal Server Error", w.Body.String())
+	r.ServeHTTP(w, req)
 
-	// Проверка того, что метод был вызван
+	// Проверка результата
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+
+	// Проверка вызовов моков
+	mockTypeValidator.AssertExpectations(t)
+	mockNameValidator.AssertExpectations(t)
 	mockService.AssertExpectations(t)
 }
 
 func TestGetMetricValueByTypeHandler_ServiceError(t *testing.T) {
-	// Arrange
 	mockService := new(MockGetValueService)
-	router := gin.Default()
-	router.GET("/value/:type", func(c *gin.Context) {
-		getMetricValueByTypeHandler(mockService, c)
-	})
+	mockTypeValidator := new(MockMetricTypeValidator)
+	mockNameValidator := new(MockMetricNameValidator)
 
-	// Устанавливаем ожидание на мок-сервис
+	handler := &GetValueHandler{
+		service:             mockService,
+		metricTypeValidator: mockTypeValidator,
+		metricNameValidator: mockNameValidator,
+	}
+
+	r := gin.Default()
+	RegisterGetMetricValueHandler(r, handler)
+
+	metricType := "cpu"
+
+	// Мокаем валидатор
+	mockTypeValidator.On("Validate", metricType).Return(nil).Once()
+
+	// Мокаем ошибку в сервисе
 	mockService.On("GetMetricValue", mock.Anything, &types.GetMetricValueRequest{
-		Type: "gauge",
-	}).Return("", errors.New("internal error"))
+		Type: metricType,
+	}).Return("", &apierror.APIError{Code: http.StatusInternalServerError, Message: "Service error"}).Once()
 
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/value/gauge", nil)
-	assert.NoError(t, err)
-
-	// Отправляем запрос
+	req, _ := http.NewRequest(http.MethodGet, "/value/"+metricType, nil)
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
 
-	// Проверяем результат
+	r.ServeHTTP(w, req)
+
+	// Проверка результата
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
-	assert.Equal(t, "Internal Server Error", w.Body.String())
+	assert.Equal(t, "Service error", w.Body.String())
 
-	// Проверка того, что метод был вызван
-	mockService.AssertExpectations(t)
-}
-
-func TestGetMetricValueByTypeHandler_APINotFoundError(t *testing.T) {
-	// Arrange
-	mockService := new(MockGetValueService)
-	router := gin.Default()
-	router.GET("/value/:type", func(c *gin.Context) {
-		getMetricValueByTypeHandler(mockService, c)
-	})
-
-	// Устанавливаем ожидание на мок-сервис
-	mockService.On("GetMetricValue", mock.Anything, &types.GetMetricValueRequest{
-		Type: "gauge",
-	}).Return("", &apierror.APIError{
-		Code:    http.StatusNotFound,
-		Message: "Metric type not found",
-	})
-
-	// Создаем запрос
-	req, err := http.NewRequest("GET", "/value/gauge", nil)
-	assert.NoError(t, err)
-
-	// Отправляем запрос
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	// Проверяем результат
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Equal(t, "Metric type not found", w.Body.String())
-
-	// Проверка того, что метод был вызван
+	// Проверка вызовов моков
+	mockTypeValidator.AssertExpectations(t)
+	mockNameValidator.AssertExpectations(t)
 	mockService.AssertExpectations(t)
 }

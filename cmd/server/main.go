@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"go-metrics-alerting/internal/configs"
-	"go-metrics-alerting/internal/engines"
-	"go-metrics-alerting/internal/handlers"
-	"go-metrics-alerting/internal/repositories"
-	"go-metrics-alerting/internal/services"
+	handlers "go-metrics-alerting/internal/handlers/metric"
+	"go-metrics-alerting/internal/services/metric"
+	"go-metrics-alerting/internal/storage/key"
+	"go-metrics-alerting/internal/storage/repositories"
+	"go-metrics-alerting/internal/storage/storage"
+
 	"go-metrics-alerting/pkg/logger"
 
 	"github.com/caarlos0/env"
@@ -39,10 +41,10 @@ func main() {
 	r.RedirectTrailingSlash = false
 
 	// Создаем хранилище данных (в данном случае это память, но может быть база данных)
-	storageEngine := &engines.StorageEngine{}
+	storageEngine := &storage.StorageEngine{}
 
 	// Создаем обработчик ключей для хранилища
-	keyEngine := &engines.KeyEngine{}
+	keyEngine := &key.KeyEngine{}
 
 	// Создаем репозиторий для метрик
 	metricRepository := &repositories.MetricRepository{
@@ -51,9 +53,9 @@ func main() {
 	}
 
 	// Создаем сервисы для работы с метриками
-	updateMetricService := &services.UpdateMetricValueService{MetricRepository: metricRepository}
-	getMetricService := &services.GetMetricValueService{MetricRepository: metricRepository}
-	getAllMetricService := &services.GetAllMetricValuesService{MetricRepository: metricRepository}
+	updateMetricService := &metric.UpdateMetricValueService{MetricRepository: metricRepository}
+	getMetricService := &metric.GetMetricValueService{MetricRepository: metricRepository}
+	getAllMetricService := &metric.GetAllMetricValuesService{MetricRepository: metricRepository}
 
 	// Регистрируем обработчики для маршрутов
 	handlers.RegisterUpdateValueHandler(r, updateMetricService)

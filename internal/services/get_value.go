@@ -21,29 +21,13 @@ type GetMetricValueService struct {
 
 // GetMetricValue возвращает значение метрики по имени и типу
 func (s *GetMetricValueService) GetMetricValue(ctx context.Context, req *types.GetMetricValueRequest) (string, error) {
-	// Проверяем тип метрики
-	if req.Type == types.EmptyString {
-		return types.EmptyString, &apierror.APIError{
-			Code:    http.StatusBadRequest,
-			Message: errors.ErrInvalidMetricType.Error(),
-		}
-	}
-
-	// Проверяем имя метрики
-	if req.Name == types.EmptyString {
-		return types.EmptyString, &apierror.APIError{
-			Code:    http.StatusBadRequest,
-			Message: errors.ErrInvalidMetricName.Error(),
-		}
-	}
-
 	// Получаем текущее значение метрики из репозитория с использованием контекста
 	currentValue, err := s.MetricRepository.Get(ctx, req.Type, req.Name)
 	if err != nil {
 		// Возвращаем ошибку, если метрика не найдена
 		return types.EmptyString, &apierror.APIError{
 			Code:    http.StatusNotFound,
-			Message: errors.ErrValueNotFound.Error(), // Используем ошибку из пакета errors
+			Message: errors.ErrMetricNotFound.Error(),
 		}
 	}
 

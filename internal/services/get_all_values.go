@@ -28,18 +28,12 @@ func (s *GetAllMetricValuesService) GetAllMetricValues(ctx context.Context) []*t
 
 	// Иначе продолжаем обработку
 	for _, metric := range metricsList {
-		// Преобразуем строку типа в MetricType
-		metricType := types.MetricType(metric[0])
-
 		// Создаем MetricResponse с полями, используя встраивание
 		metrics = append(
 			metrics,
 			&types.MetricResponse{
-				UpdateMetricValueRequest: types.UpdateMetricValueRequest{
-					Type:  string(metricType),
-					Name:  metric[1],
-					Value: metric[2],
-				},
+				Name:  metric[1],
+				Value: metric[2],
 			},
 		)
 	}

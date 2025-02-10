@@ -1,4 +1,4 @@
-package engines
+package storage
 
 import (
 	"context"
@@ -38,7 +38,7 @@ type StorageEngine struct {
 func (m *StorageEngine) Set(ctx context.Context, key string, value string) error {
 	select {
 	case <-ctx.Done(): // Проверяем, отменен ли контекст.
-		return ctx.Err()
+		return errors.ErrContextDone // Используем константу для ошибки
 	default:
 		m.data.Store(key, value)
 		return nil
@@ -49,12 +49,12 @@ func (m *StorageEngine) Set(ctx context.Context, key string, value string) error
 func (m *StorageEngine) Get(ctx context.Context, key string) (string, error) {
 	select {
 	case <-ctx.Done(): // Проверяем, отменен ли контекст.
-		return types.EmptyString, ctx.Err()
+		return types.EmptyString, errors.ErrContextDone // Используем константу для ошибки
 	default:
 		if value, ok := m.data.Load(key); ok {
 			return value.(string), nil
 		}
-		return types.EmptyString, errors.ErrValueNotFound
+		return types.EmptyString, errors.ErrValueNotFound // Используем константу для ошибки
 	}
 }
 
@@ -66,7 +66,7 @@ func (m *StorageEngine) Generate(ctx context.Context) <-chan []string {
 		defer close(ch)
 		m.data.Range(func(key, value any) bool {
 			select {
-			case <-ctx.Done():
+			case <-ctx.Done(): // Проверяем, отменен ли контекст.
 				return false
 			case ch <- []string{key.(string), value.(string)}:
 				return true

@@ -10,48 +10,110 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// Валидационные интерфейсы
+
+type UpdateValueMetricTypeValidator interface {
+	Validate(metricType string) error
+}
+
+type UpdateValueMetricNameValidator interface {
+	Validate(metricName string) error
+}
+
+type UpdateValueMetricValueValidator interface {
+	Validate(metricValue string) error
+}
+
+type UpdateValueMetricGaugeValidator interface {
+	Validate(metricValue string) error
+}
+
+type UpdateValueMetricCounterValidator interface {
+	Validate(metricValue string) error
+}
+
+// Сервис обновления метрики
 type UpdateValueService interface {
 	UpdateMetricValue(ctx context.Context, req *types.UpdateMetricValueRequest) error
 }
 
-// Регистрация обработчиков обновления метрик
-func RegisterUpdateValueHandler(r *gin.Engine, svc UpdateValueService) {
+// Структура обработчика для обновления метрики
+type UpdateValueHandler struct {
+	service               UpdateValueService
+	metricTypeValidator   UpdateValueMetricTypeValidator
+	metricNameValidator   UpdateValueMetricNameValidator
+	metricValueValidator  UpdateValueMetricValueValidator
+	gaugeValueValidator   UpdateValueMetricGaugeValidator
+	counterValueValidator UpdateValueMetricCounterValidator
+}
+
+// Регистрация маршрутов
+func (h *UpdateValueHandler) RegisterRoutes(r *gin.Engine) {
 	r.RedirectTrailingSlash = false
-
-	r.POST("/update/:type/:name/:value", func(c *gin.Context) {
-		updateValueHandler(svc, c)
-	})
-
+	r.POST("/update/:type/:name/:value", h.updateValueHandler)
 	r.NoRoute(func(c *gin.Context) {
 		c.String(http.StatusNotFound, "Route not found")
 	})
 }
 
-// Обработчик обновления значения метрики
-func updateValueHandler(service UpdateValueService, c *gin.Context) {
+// Обработчик обновления метрики
+func (h *UpdateValueHandler) updateValueHandler(c *gin.Context) {
 	metricType := c.Param("type")
 	metricName := c.Param("name")
 	metricValue := c.Param("value")
 
+	// Применяем валидатор типа метрики
+	if err := h.metricTypeValidator.Validate(metricType); err != nil {
+		c.String(http.StatusBadRequest, err.Error()) // Ошибка типа метрики
+		return
+	}
+
+	// Валидация имени метрики
+	if err := h.metricNameValidator.Validate(metricName); err != nil {
+		// Возвращаем 404, если ошибка валидации имени метрики
+		c.String(http.StatusNotFound, err.Error())
+		return
+	}
+
+	// Валидация значения метрики
+	if err := h.metricValueValidator.Validate(metricValue); err != nil {
+		c.String(http.StatusBadRequest, err.Error()) // Ошибка значения метрики
+		return
+	}
+
+	// Дополнительная валидация значений в зависимости от типа метрики
+	switch metricType {
+	case string(types.Gauge):
+		if err := h.gaugeValueValidator.Validate(metricValue); err != nil {
+			c.String(http.StatusBadRequest, err.Error()) // Ошибка для Gauge
+			return
+		}
+	case string(types.Counter):
+		if err := h.counterValueValidator.Validate(metricValue); err != nil {
+			c.String(http.StatusBadRequest, err.Error()) // Ошибка для Counter
+			return
+		}
+	}
+
+	// Подготовка запроса для обновления метрики
 	updateRequest := &types.UpdateMetricValueRequest{
-		Type:  metricType,
+		Type:  types.MetricType(metricType),
 		Name:  metricName,
 		Value: metricValue,
 	}
 
-	// Обновляем значение метрики с валидацией в сервисе
-	if err := service.UpdateMetricValue(c, updateRequest); err != nil { // Передаем контекст c
+	// Обновляем метрику через сервис
+	if err := h.service.UpdateMetricValue(c, updateRequest); err != nil {
 		if apiErr, ok := err.(*apierror.APIError); ok {
-			c.String(apiErr.Code, apiErr.Message)
+			c.String(apiErr.Code, apiErr.Message) // Ошибка API
 			return
 		}
-		c.String(http.StatusInternalServerError, "Internal Server Error")
+		c.String(http.StatusInternalServerError, "Internal Server Error") // Внутренняя ошибка сервера
 		return
 	}
 
-	// Формируем ответ
-	response := "Metric updated"
+	// Успешный ответ
 	c.Header("Content-Type", "text/plain; charset=utf-8")
 	c.Header("Date", time.Now().UTC().Format(time.RFC1123))
-	c.String(http.StatusOK, response) // Gin сам установит Content-Length
+	c.String(http.StatusOK, "Metric updated")
 }
