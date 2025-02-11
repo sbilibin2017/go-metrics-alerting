@@ -2,8 +2,7 @@ package engines
 
 import (
 	"context"
-	"go-metrics-alerting/internal/errors"
-	"go-metrics-alerting/internal/types"
+	"errors"
 	"sync"
 )
 
@@ -29,6 +28,15 @@ type Storage interface {
 	Generator
 }
 
+const (
+	StorageEmptyString string = ""
+)
+
+var (
+	ErrContextDone   error = errors.New("context done")
+	ErrValueNotFound error = errors.New("value not found")
+)
+
 // MemStorage реализует интерфейс Storage, используя sync.Map.
 type StorageEngine struct {
 	data sync.Map
@@ -38,7 +46,7 @@ type StorageEngine struct {
 func (m *StorageEngine) Set(ctx context.Context, key string, value string) error {
 	select {
 	case <-ctx.Done(): // Проверяем, отменен ли контекст.
-		return errors.ErrContextDone // Используем константу для ошибки
+		return ErrContextDone // Используем константу для ошибки
 	default:
 		m.data.Store(key, value)
 		return nil
@@ -49,30 +57,28 @@ func (m *StorageEngine) Set(ctx context.Context, key string, value string) error
 func (m *StorageEngine) Get(ctx context.Context, key string) (string, error) {
 	select {
 	case <-ctx.Done(): // Проверяем, отменен ли контекст.
-		return types.EmptyString, errors.ErrContextDone // Используем константу для ошибки
+		return StorageEmptyString, ErrContextDone // Используем константу для ошибки
 	default:
 		if value, ok := m.data.Load(key); ok {
 			return value.(string), nil
 		}
-		return types.EmptyString, errors.ErrValueNotFound // Используем константу для ошибки
+		return StorageEmptyString, ErrValueNotFound // Используем константу для ошибки
 	}
 }
 
-// Generate возвращает канал, из которого можно последовательно извлекать все метрики.
 func (m *StorageEngine) Generate(ctx context.Context) <-chan []string {
 	ch := make(chan []string)
-
 	go func() {
 		defer close(ch)
+
 		m.data.Range(func(key, value any) bool {
 			select {
-			case <-ctx.Done(): // Проверяем, отменен ли контекст.
+			case <-ctx.Done():
 				return false
 			case ch <- []string{key.(string), value.(string)}:
 				return true
 			}
 		})
 	}()
-
 	return ch
 }

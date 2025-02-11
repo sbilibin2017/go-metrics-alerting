@@ -2,13 +2,15 @@ package main
 
 import (
 	"flag"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"go-metrics-alerting/internal/configs"
 	"go-metrics-alerting/internal/services"
 	"go-metrics-alerting/internal/types"
 	"go-metrics-alerting/pkg/logger"
-	"os"
-	"time"
 
 	"github.com/caarlos0/env"
 	"github.com/go-resty/resty/v2"
@@ -67,9 +69,26 @@ func main() {
 		Address:        config.Address, // Or another base URL if needed
 	}
 
+	// Create a channel to catch termination signals (e.g. Ctrl+C)
+	signalChannel := make(chan os.Signal, 1)
+	// Register for SIGINT (Ctrl+C) and SIGTERM (process termination)
+	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
+
 	// Start the agent service in a new goroutine
 	go agentService.Start()
 
-	// Block the main goroutine so the agent continues running
-	select {}
+	// Block the main goroutine, waiting for termination signal
+	sig := <-signalChannel
+	logger.Logger.Infof("Received signal: %s. Shutting down agent...", sig)
+
+	// Gracefully shut down the agent service (you may want to add a Stop() method to agentService)
+	// For example, you can use `agentService.Stop()` if such method exists
+	agentService.Shutdown <- sig // Or call a shutdown function on the service, if it exists
+
+	// Ensure that the agent service cleans up properly before the program exits
+	// You can also wait for the agent to complete any active operations or goroutines
+	// if necessary before shutting down completely.
+
+	// Log the shutdown process
+	logger.Logger.Info("Agent service shutdown complete.")
 }

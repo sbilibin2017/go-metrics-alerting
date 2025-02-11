@@ -4,79 +4,53 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestKeyEngine_Encode(t *testing.T) {
+	ke := &KeyEngine{}
+
 	tests := []struct {
-		metricType string
-		metricName string
-		expected   string
+		name     string
+		mt       string
+		mn       string
+		expected string
 	}{
-		{"counter", "metric1", "counter:metric1"},
-		{"gauge", "metric2", "gauge:metric2"},
-		{"counter", "metric3", "counter:metric3"},
+		{"valid input", "gauge", "cpu", "gauge:cpu"},
+		{"empty metric name", "counter", "", "counter:"},
+		{"empty metric type", "", "memory", ":memory"},
 	}
 
-	ke := &KeyEngine{}
-	for _, test := range tests {
-		t.Run(test.metricType+"_"+test.metricName, func(t *testing.T) {
-			result := ke.Encode(test.metricType, test.metricName)
-			assert.Equal(t, test.expected, result, "Encoded key should match expected value")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ke.Encode(tt.mt, tt.mn)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
 
 func TestKeyEngine_Decode(t *testing.T) {
-	tests := []struct {
-		key          string
-		expectedType string
-		expectedName string
-		expectError  bool
-	}{
-		{"counter:metric1", "counter", "metric1", false},
-		{"gauge:metric2", "gauge", "metric2", false},
-		{"invalidkey", "", "", true},
-		{":missingname", "", "", true},
-		{"missingtype:", "", "", true},
-	}
-
 	ke := &KeyEngine{}
-	for _, test := range tests {
-		t.Run(test.key, func(t *testing.T) {
-			metricType, metricName, err := ke.Decode(test.key)
 
-			if test.expectError {
-				require.Error(t, err, "Expected an error but got none")
-			} else {
-				require.NoError(t, err, "Unexpected error occurred")
-				assert.Equal(t, test.expectedType, metricType, "Decoded metric type should match expected")
-				assert.Equal(t, test.expectedName, metricName, "Decoded metric name should match expected")
-			}
-		})
-	}
-}
-
-func TestKeyEngine_Decode_EmptyStrings(t *testing.T) {
-	ke := &KeyEngine{}
 	tests := []struct {
-		key         string
-		expectError bool
+		name   string
+		key    string
+		expMt  string
+		expMn  string
+		expErr error
 	}{
-		{"", true},
-		{":", true},
-		{"emptykey:", true},
-		{":emptykey", true},
+		{"valid key", "gauge:cpu", "gauge", "cpu", nil},
+		{"invalid key format - missing separator", "gaugecpu", "", "", ErrInvalidKeyFormat},
+		{"invalid key format - empty type", ":memory", "", "", ErrInvalidKeyFormat},
+		{"invalid key format - empty name", "counter:", "", "", ErrInvalidKeyFormat},
+		{"invalid key format - multiple separators", "gauge:cpu:extra", "", "", ErrInvalidKeyFormat},
 	}
 
-	for _, test := range tests {
-		t.Run(test.key, func(t *testing.T) {
-			_, _, err := ke.Decode(test.key)
-			if test.expectError {
-				require.Error(t, err, "Expected an error for empty key but got none")
-			} else {
-				require.NoError(t, err, "Unexpected error for key")
-			}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mt, mn, err := ke.Decode(tt.key)
+			assert.Equal(t, tt.expMt, mt)
+			assert.Equal(t, tt.expMn, mn)
+			assert.Equal(t, tt.expErr, err)
 		})
 	}
 }
