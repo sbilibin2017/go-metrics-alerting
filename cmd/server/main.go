@@ -5,10 +5,9 @@ import (
 
 	"go-metrics-alerting/internal/configs"
 	"go-metrics-alerting/internal/engines"
-	"go-metrics-alerting/internal/handlers"
 	"go-metrics-alerting/internal/repositories"
+	"go-metrics-alerting/internal/routers"
 	"go-metrics-alerting/internal/services"
-	"go-metrics-alerting/internal/validators"
 	"go-metrics-alerting/pkg/logger"
 
 	"github.com/caarlos0/env"
@@ -55,37 +54,9 @@ func main() {
 	}
 
 	// Создаем сервисы для работы с метриками
-	updateMetricService := &services.UpdateMetricValueService{MetricRepository: metricRepository}
-	getMetricService := &services.GetMetricValueService{MetricRepository: metricRepository}
-	getAllMetricService := &services.GetAllMetricValuesService{MetricRepository: metricRepository}
+	metricService := &services.MetricService{MetricRepository: metricRepository}
 
-	// Инициализируем валидаторы для каждого маршрута
-	metricTypeValidator := &validators.MetricTypeValidator{}
-	metricNameValidator := &validators.MetricNameValidator{}
-	metricValueValidator := &validators.MetricValueValidator{}
-	gaugeValueValidator := &validators.MetricGaugeValidator{}
-	counterValueValidator := &validators.MetricCounterValidator{}
-
-	// Регистрируем обработчики для маршрутов
-	handlers.RegisterUpdateMetricValueHandler(
-		r, updateMetricService,
-		metricTypeValidator,
-		metricNameValidator,
-		metricValueValidator,
-		gaugeValueValidator,
-		counterValueValidator,
-	)
-
-	handlers.RegisterGetMetricValueHandler(
-		r, getMetricService,
-		metricTypeValidator,
-		metricNameValidator,
-	)
-
-	handlers.RegisterGetAllMetricValuesHandler(r, getAllMetricService)
-
-	// Логируем информацию о запуске сервера
-	logger.Logger.Infof("Server is running on %s...", config.Address)
+	routers.RegisterMetricHandlers(r, metricService)
 
 	// Запуск сервера на указанном порту
 	if err := r.Run(config.Address); err != nil {
