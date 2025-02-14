@@ -1,211 +1,134 @@
 package repositories
 
 import (
-	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 )
 
-// MockStorageEngine - мок для StorageEngine
-type MockStorageEngine struct {
-	mock.Mock
+// MockStorage implements the Storage interface for testing purposes.
+type MockStorage struct {
+	data map[string]string
 }
 
-func (m *MockStorageEngine) Set(ctx context.Context, key, value string) error {
-	args := m.Called(ctx, key, value)
-	return args.Error(0)
+func (m *MockStorage) Set(key, value string) {
+	m.data[key] = value
 }
 
-func (m *MockStorageEngine) Get(ctx context.Context, key string) (string, error) {
-	args := m.Called(ctx, key)
-	return args.String(0), args.Error(1)
+func (m *MockStorage) Get(key string) (string, bool) {
+	value, exists := m.data[key]
+	return value, exists
 }
 
-func (m *MockStorageEngine) Generate(ctx context.Context) <-chan []string {
-	args := m.Called(ctx)
-	return args.Get(0).(chan []string)
-}
-
-// MockKeyEngine - мок для KeyEngine
-type MockKeyEngine struct {
-	mock.Mock
-}
-
-func (m *MockKeyEngine) Encode(mt, mn string) string {
-	args := m.Called(mt, mn)
-	return args.String(0)
-}
-
-func (m *MockKeyEngine) Decode(key string) (string, string, error) {
-	args := m.Called(key)
-	return args.String(0), args.String(1), args.Error(2)
-}
-
-func TestMetricRepository_Save_Success(t *testing.T) {
-	// Arrange
-	mockStorage := new(MockStorageEngine)
-	mockKeyEngine := new(MockKeyEngine)
-	repo := &MetricRepository{StorageEngine: mockStorage, KeyEngine: mockKeyEngine}
-
-	metricType := "counter"
-	metricName := "requests"
-	metricValue := "100"
-
-	// Mocking Encode to return the correct key
-	mockKeyEngine.On("Encode", metricType, metricName).Return("counter:requests").Once()
-	// Mocking Set to succeed
-	mockStorage.On("Set", mock.Anything, "counter:requests", metricValue).Return(nil).Once()
-
-	// Act
-	err := repo.Save(context.Background(), metricType, metricName, metricValue)
-
-	// Assert
-	assert.Nil(t, err)
-	mockStorage.AssertExpectations(t)
-	mockKeyEngine.AssertExpectations(t)
-}
-
-func TestMetricRepository_Save_Failure(t *testing.T) {
-	// Arrange
-	mockStorage := new(MockStorageEngine)
-	mockKeyEngine := new(MockKeyEngine)
-	repo := &MetricRepository{StorageEngine: mockStorage, KeyEngine: mockKeyEngine}
-
-	metricType := "counter"
-	metricName := "requests"
-	metricValue := "100"
-
-	// Mocking Encode to return the correct key
-	mockKeyEngine.On("Encode", metricType, metricName).Return("counter:requests").Once()
-	// Mocking Set to return an error
-	mockStorage.On("Set", mock.Anything, "counter:requests", metricValue).Return(errors.New("storage error")).Once()
-
-	// Act
-	err := repo.Save(context.Background(), metricType, metricName, metricValue)
-
-	// Assert
-	assert.NotNil(t, err)
-	assert.Equal(t, "storage error", err.Error())
-	mockStorage.AssertExpectations(t)
-	mockKeyEngine.AssertExpectations(t)
-}
-
-func TestMetricRepository_Get_Success(t *testing.T) {
-	// Arrange
-	mockStorage := new(MockStorageEngine)
-	mockKeyEngine := new(MockKeyEngine)
-	repo := &MetricRepository{StorageEngine: mockStorage, KeyEngine: mockKeyEngine}
-
-	metricType := "counter"
-	metricName := "requests"
-	metricValue := "100"
-
-	// Mocking Encode to return the correct key
-	mockKeyEngine.On("Encode", metricType, metricName).Return("counter:requests").Once()
-	// Mocking Get to return the value successfully
-	mockStorage.On("Get", mock.Anything, "counter:requests").Return(metricValue, nil).Once()
-
-	// Act
-	result, err := repo.Get(context.Background(), metricType, metricName)
-
-	// Assert
-	assert.Nil(t, err)
-	assert.Equal(t, metricValue, result)
-	mockStorage.AssertExpectations(t)
-	mockKeyEngine.AssertExpectations(t)
-}
-
-func TestMetricRepository_Get_Failure(t *testing.T) {
-	// Arrange
-	mockStorage := new(MockStorageEngine)
-	mockKeyEngine := new(MockKeyEngine)
-	repo := &MetricRepository{StorageEngine: mockStorage, KeyEngine: mockKeyEngine}
-
-	metricType := "counter"
-	metricName := "requests"
-
-	// Mocking Encode to return the correct key
-	mockKeyEngine.On("Encode", metricType, metricName).Return("counter:requests").Once()
-	// Mocking Get to return an error
-	mockStorage.On("Get", mock.Anything, "counter:requests").Return("", errors.New("storage error")).Once()
-
-	// Act
-	result, err := repo.Get(context.Background(), metricType, metricName)
-
-	// Assert
-	assert.NotNil(t, err)
-	assert.Equal(t, "", result) // Проверяем, что вернулась пустая строка
-	assert.Equal(t, "storage error", err.Error())
-	mockStorage.AssertExpectations(t)
-	mockKeyEngine.AssertExpectations(t)
-}
-
-func TestMetricRepository_GetAll_Success(t *testing.T) {
-	// Arrange
-	mockStorage := new(MockStorageEngine)
-	mockKeyEngine := new(MockKeyEngine)
-	repo := &MetricRepository{StorageEngine: mockStorage, KeyEngine: mockKeyEngine}
-
-	// Preparing mock data for Generate
-	ch := make(chan []string, 2)
-	mockStorage.On("Generate", mock.Anything).Return(ch)
-
-	// Simulating valid data for the test
-	go func() {
-		ch <- []string{"counter:requests", "100"}
-		ch <- []string{"gauge:cpu_usage", "0.85"}
-		close(ch)
-	}()
-
-	// Mocking Decode to return the decoded values
-	mockKeyEngine.On("Decode", "counter:requests").Return("counter", "requests", nil).Once()
-	mockKeyEngine.On("Decode", "gauge:cpu_usage").Return("gauge", "cpu_usage", nil).Once()
-
-	// Act
-	result := repo.GetAll(context.Background())
-
-	// Assert
-	expected := [][]string{
-		{"counter", "requests", "100"},
-		{"gauge", "cpu_usage", "0.85"},
+func (m *MockStorage) Range(callback func(key, value string) bool) {
+	for key, value := range m.data {
+		if !callback(key, value) {
+			break
+		}
 	}
-	assert.Equal(t, expected, result)
-	mockStorage.AssertExpectations(t)
-	mockKeyEngine.AssertExpectations(t)
 }
 
-func TestMetricRepository_GetAll_DecodeError(t *testing.T) {
-	// Arrange
-	mockStorage := new(MockStorageEngine)
-	mockKeyEngine := new(MockKeyEngine)
-	repo := &MetricRepository{StorageEngine: mockStorage, KeyEngine: mockKeyEngine}
+func TestNewMetricRepository(t *testing.T) {
+	// Создаем мок хранилища
+	mockStorage := &MockStorage{data: make(map[string]string)}
 
-	// Preparing mock data for Generate
-	ch := make(chan []string, 2)
-	mockStorage.On("Generate", mock.Anything).Return(ch)
+	// Создаем репозиторий с помощью конструктора
+	repo := NewMetricRepository(mockStorage)
 
-	// Simulating data with an invalid key for decoding
-	go func() {
-		ch <- []string{"counter:requests", "100"}
-		ch <- []string{"invalid_key", "999"} // This should fail decoding
-		close(ch)
-	}()
+	// Проверка, что репозиторий был инициализирован и использует переданное хранилище
+	assert.NotNil(t, repo)
+	assert.Equal(t, mockStorage, repo.storage)
+}
 
-	// Mocking Decode to return an error for the invalid key
-	mockKeyEngine.On("Decode", "counter:requests").Return("counter", "requests", nil).Once()
-	mockKeyEngine.On("Decode", "invalid_key").Return("", "", errors.New("decode error")).Once()
+// TestSave tests saving a metric to the storage.
+func TestSave(t *testing.T) {
+	mockStorage := &MockStorage{data: make(map[string]string)}
+	repo := &MetricRepository{storage: mockStorage}
 
-	// Act
-	result := repo.GetAll(context.Background())
+	// Save a valid metric
+	repo.Save("cpu", "usage", "75")
 
-	// Assert
-	expected := [][]string{
-		{"counter", "requests", "100"},
-	}
-	assert.Equal(t, expected, result)
-	mockStorage.AssertExpectations(t)
-	mockKeyEngine.AssertExpectations(t)
+	// Assert that the metric is saved correctly
+	value, exists := mockStorage.Get("cpu:usage")
+	assert.True(t, exists)
+	assert.Equal(t, "75", value)
+}
+
+// TestSaveWithEmptyTypeOrName tests saving a metric with empty metricType or metricName.
+func TestSaveWithEmptyTypeOrName(t *testing.T) {
+	mockStorage := &MockStorage{data: make(map[string]string)}
+	repo := &MetricRepository{storage: mockStorage}
+
+	// Save a metric with an empty type
+	repo.Save("", "usage", "50")
+	// Save a metric with an empty name
+	repo.Save("cpu", "", "30")
+
+	// Assert that the metrics with empty type or name are still saved
+	// The keys will be ":usage" and "cpu:"
+	value, exists := mockStorage.Get(":usage")
+	assert.True(t, exists)
+	assert.Equal(t, "50", value)
+
+	value, exists = mockStorage.Get("cpu:")
+	assert.True(t, exists)
+	assert.Equal(t, "30", value)
+}
+
+// TestGet tests retrieving a metric from the storage.
+func TestGet(t *testing.T) {
+	mockStorage := &MockStorage{data: make(map[string]string)}
+	repo := &MetricRepository{storage: mockStorage}
+
+	// Save a metric
+	repo.Save("cpu", "usage", "75")
+
+	// Test getting the saved metric
+	value, err := repo.Get("cpu", "usage")
+	assert.NoError(t, err)
+	assert.Equal(t, "75", value)
+
+	// Test getting a non-existing metric
+	_, err = repo.Get("cpu", "nonexistent")
+	assert.Error(t, err)
+	assert.Equal(t, ErrValueDoesNotExist, err)
+}
+
+// TestGetAll tests retrieving all metrics from the storage.
+func TestGetAll(t *testing.T) {
+	mockStorage := &MockStorage{data: make(map[string]string)}
+	repo := &MetricRepository{storage: mockStorage}
+
+	// Save a few metrics
+	repo.Save("cpu", "usage", "75")
+	repo.Save("disk", "usage", "50")
+	repo.Save("", "empty", "100")   // Saving with empty metricType
+	repo.Save("network", "", "200") // Saving with empty metricName
+
+	// Get all metrics
+	allMetrics := repo.GetAll()
+
+	// Assert that we have 2 valid metrics (ignoring the invalid ones)
+	assert.Len(t, allMetrics, 2)
+
+	// Check that the valid metrics are returned correctly
+	assert.Contains(t, allMetrics, []string{"cpu", "usage", "75"})
+	assert.Contains(t, allMetrics, []string{"disk", "usage", "50"})
+}
+
+// TestGetAllWithInvalidKeys tests GetAll with invalid key formats.
+func TestGetAllWithInvalidKeys(t *testing.T) {
+	mockStorage := &MockStorage{data: make(map[string]string)}
+	repo := &MetricRepository{storage: mockStorage}
+
+	// Save some invalid metrics
+	repo.Save("", "empty", "100")           // Invalid key with empty type
+	repo.Save("network", "", "200")         // Invalid key with empty name
+	repo.Save("disk:extra", "usage", "300") // Invalid format with more than one separator
+
+	// Get all metrics
+	allMetrics := repo.GetAll()
+
+	// Assert that no invalid metrics are included
+	assert.Len(t, allMetrics, 0)
 }

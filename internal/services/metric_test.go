@@ -1,10 +1,8 @@
 package services
 
 import (
-	"context"
 	"errors"
 	"go-metrics-alerting/internal/types"
-	"go-metrics-alerting/pkg/apierror"
 	"net/http"
 	"testing"
 
@@ -12,319 +10,151 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
+// MockMetricRepository имитирует поведение хранилища метрик.
 type MockMetricRepository struct {
 	mock.Mock
 }
 
-func (m *MockMetricRepository) Save(ctx context.Context, metricType, metricName, value string) error {
-	args := m.Called(ctx, metricType, metricName, value)
-	return args.Error(0)
+func (m *MockMetricRepository) Save(metricType, metricName, metricValue string) {
+	m.Called(metricType, metricName, metricValue)
 }
 
-func (m *MockMetricRepository) Get(ctx context.Context, metricType, metricName string) (string, error) {
-	args := m.Called(ctx, metricType, metricName)
+func (m *MockMetricRepository) Get(metricType, metricName string) (string, error) {
+	args := m.Called(metricType, metricName)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockMetricRepository) GetAll(ctx context.Context) [][]string {
-	args := m.Called(ctx)
+func (m *MockMetricRepository) GetAll() [][]string {
+	args := m.Called()
 	return args.Get(0).([][]string)
 }
 
-func TestUpdateMetric_MissingMetricName(t *testing.T) {
+func TestUpdateMetric_Success_GaugeType(t *testing.T) {
 	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
+	service := NewMetricService(mockRepo)
 
-	req := &types.UpdateMetricValueRequest{Name: "", Type: types.Counter, Value: "5"}
-	err := service.UpdateMetric(ctx, req)
-	assert.Error(t, err)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusNotFound, apiErr.Code)
-}
+	req := &types.UpdateMetricValueRequest{
+		Name:  "metric1",
+		Type:  types.Gauge,
+		Value: "10.5", // New value to replace the current value
+	}
 
-func TestUpdateMetric_MissingMetricType(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
+	// Mock the Get method to return an existing value for the metric (e.g., 5.5)
+	mockRepo.On("Get", string(types.Gauge), "metric1").Return("5.5", nil).Once()
 
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: "", Value: "5"}
-	err := service.UpdateMetric(ctx, req)
-	assert.Error(t, err)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusNotFound, apiErr.Code)
-}
+	// Mock the Save method to save the new value (replacing the old one)
+	mockRepo.On("Save", string(types.Gauge), "metric1", "10.5").Return().Once()
 
-func TestUpdateMetric_GetMetricError_DefaultValueUsed(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
+	// Call the UpdateMetric method
+	service.UpdateMetric(req)
 
-	mockRepo.On("Get", ctx, "counter", "test_metric").Return("", errors.New("not found"))
-	mockRepo.On("Save", ctx, "counter", "test_metric", "5").Return(nil)
-
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Counter, Value: "5"}
-	err := service.UpdateMetric(ctx, req)
-	assert.NoError(t, err)
+	// Assert that the repository expectations are met (i.e., Get and Save were called correctly)
 	mockRepo.AssertExpectations(t)
 }
 
-func TestUpdateMetric_InvalidCounterValue(t *testing.T) {
+func TestUpdateMetric_RepoReturnsEmpty_FallsBackToDefault(t *testing.T) {
 	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
+	service := NewMetricService(mockRepo)
 
-	mockRepo.On("Get", ctx, "counter", "test_metric").Return("", nil)
+	req := &types.UpdateMetricValueRequest{
+		Name:  "metric1",
+		Type:  types.Counter,
+		Value: "10",
+	}
 
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Counter, Value: "invalid"}
-	err := service.UpdateMetric(ctx, req)
+	// Mock the Get method to return an empty string (MetricEmptyString)
+	mockRepo.On("Get", string(types.Counter), "metric1").Return(MetricEmptyString, nil).Once()
 
-	assert.Error(t, err)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusBadRequest, apiErr.Code)
+	// Mock the Save method to do nothing (i.e., no error returned)
+	mockRepo.On("Save", string(types.Counter), "metric1", "10").Return().Once()
 
+	// Call the UpdateMetric method
+	service.UpdateMetric(req)
+
+	// Assert that the fallback logic worked (the value should be set to DefaultMetricValue)
 	mockRepo.AssertExpectations(t)
 }
 
-func TestUpdateMetric_InvalidGaugeValue(t *testing.T) {
+func TestNewMetricService(t *testing.T) {
 	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	mockRepo.On("Get", ctx, "gauge", "test_metric").Return("", nil)
-
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Gauge, Value: "invalid"}
-	err := service.UpdateMetric(ctx, req)
-
-	assert.Error(t, err)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusBadRequest, apiErr.Code)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUpdateMetric_SuccessfulCounterUpdate(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	mockRepo.On("Get", ctx, "counter", "test_metric").Return("10", nil)
-	mockRepo.On("Save", ctx, "counter", "test_metric", "15").Return(nil)
-
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Counter, Value: "5"}
-	err := service.UpdateMetric(ctx, req)
-	assert.NoError(t, err)
-	mockRepo.AssertExpectations(t)
+	service := NewMetricService(mockRepo)
+	assert.NotNil(t, service)
+	assert.Equal(t, mockRepo, service.repo)
 }
 
 func TestGetMetric_Success(t *testing.T) {
 	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
+	service := NewMetricService(mockRepo)
 
-	mockRepo.On("Get", ctx, "counter", "test_metric").Return("10", nil)
-	req := &types.GetMetricValueRequest{Name: "test_metric", Type: "counter"}
-	value, err := service.GetMetric(ctx, req)
-	assert.NoError(t, err)
+	mockRepo.On("Get", string(types.Counter), "metric1").Return("10", nil)
+
+	value, err := service.GetMetric(&types.GetMetricValueRequest{
+		Name: "metric1",
+		Type: types.Counter,
+	})
+
+	// Check for no error
+	assert.Nil(t, err)
+	// Assert that the value returned is correct
 	assert.Equal(t, "10", value)
+	mockRepo.AssertExpectations(t)
 }
 
-func TestGetMetric_NotFound(t *testing.T) {
+func TestGetMetric_Error(t *testing.T) {
 	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
+	service := NewMetricService(mockRepo)
 
-	mockRepo.On("Get", ctx, "counter", "test_metric").Return("", errors.New("not found"))
-	req := &types.GetMetricValueRequest{Name: "test_metric", Type: "counter"}
-	value, err := service.GetMetric(ctx, req)
-	assert.Error(t, err)
+	// Simulate an error scenario
+	mockRepo.On("Get", string(types.Counter), "metric1").Return("", errors.New("not found"))
+
+	// Call the GetMetric method
+	value, errResp := service.GetMetric(&types.GetMetricValueRequest{
+		Name: "metric1",
+		Type: types.Counter,
+	})
+
+	// Check that an error response is returned
 	assert.Equal(t, "", value)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusNotFound, apiErr.Code)
+	assert.NotNil(t, errResp)
+	assert.Equal(t, http.StatusNotFound, errResp.Code)
+	assert.Equal(t, "value not found", errResp.Message)
+
+	mockRepo.AssertExpectations(t)
 }
 
 func TestListMetrics_Success(t *testing.T) {
 	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
+	service := NewMetricService(mockRepo)
 
-	mockRepo.On("List", ctx).Return([][]string{
-		{"counter", "test_metric", "10"},
-		{"gauge", "cpu_usage", "99.9"},
+	// Mock GetAll to return a list of metrics
+	mockRepo.On("GetAll").Return([][]string{
+		{"counter", "metric1", "10"},
+		{"gauge", "metric2", "3.14"},
 	})
 
-	metrics := service.ListMetrics(ctx)
+	metrics := service.ListMetrics()
+
+	// Assert that the correct number of metrics is returned
 	assert.Len(t, metrics, 2)
-	assert.Equal(t, "test_metric", metrics[0].Name)
+	// Assert that the metric names and values are correct
+	assert.Equal(t, "metric1", metrics[0].Name)
 	assert.Equal(t, "10", metrics[0].Value)
-	assert.Equal(t, "cpu_usage", metrics[1].Name)
-	assert.Equal(t, "99.9", metrics[1].Value)
+	assert.Equal(t, "metric2", metrics[1].Name)
+	assert.Equal(t, "3.14", metrics[1].Value)
+
+	mockRepo.AssertExpectations(t)
 }
 
-func TestListMetrics_EmptyList(t *testing.T) {
+func TestListMetrics_Empty(t *testing.T) {
 	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
+	service := NewMetricService(mockRepo)
 
-	mockRepo.On("List", ctx).Return([][]string{})
+	// Mock GetAll to return an empty list of metrics
+	mockRepo.On("GetAll").Return([][]string{})
 
-	metrics := service.ListMetrics(ctx)
+	metrics := service.ListMetrics()
+
+	// Assert that the returned metrics list is empty
 	assert.Len(t, metrics, 0)
-}
-
-func TestUpdateMetric_InvalidMetricType(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: "invalid_type", Value: "10"}
-	err := service.UpdateMetric(ctx, req)
-
-	assert.Error(t, err)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusBadRequest, apiErr.Code)
-	assert.Equal(t, "invalid metric type", apiErr.Message)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUpdateMetric_SaveError(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	mockRepo.On("Get", ctx, "counter", "test_metric").Return("10", nil)
-	mockRepo.On("Save", ctx, "counter", "test_metric", "15").Return(errors.New("save error"))
-
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Counter, Value: "5"}
-	err := service.UpdateMetric(ctx, req)
-
-	assert.Error(t, err)
-
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusInternalServerError, apiErr.Code)
-	assert.Equal(t, "value is not saved", apiErr.Message)
-
-	mockRepo.AssertExpectations(t)
-}
-
-// Additional Test Cases
-
-func TestUpdateMetric_EmptyMetricType(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: "", Value: "5"}
-	err := service.UpdateMetric(ctx, req)
-
-	assert.Error(t, err)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusNotFound, apiErr.Code)
-	assert.Equal(t, "metric type is required", apiErr.Message)
-}
-
-func TestUpdateMetric_InvalidGaugeValueFormat(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	// Настроим мок для метода Get, чтобы он не вызвал панику
-	mockRepo.On("Get", ctx, "gauge", "test_metric").Return("", nil) // Возвращаем пустое значение и отсутствие ошибки
-
-	// Теперь тестируем обновление метрики с некорректным значением
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Gauge, Value: "invalid_value"}
-	err := service.UpdateMetric(ctx, req)
-
-	// Проверка на ошибку и правильный HTTP статус
-	assert.Error(t, err)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusBadRequest, apiErr.Code)
-	assert.Equal(t, "invalid gauge value", apiErr.Message)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUpdateMetric_NegativeCounterValue(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	mockRepo.On("Get", ctx, "counter", "test_metric").Return("10", nil)
-	mockRepo.On("Save", ctx, "counter", "test_metric", "5").Return(nil)
-
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Counter, Value: "-5"}
-	err := service.UpdateMetric(ctx, req)
-	assert.NoError(t, err)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestListMetrics_NilList(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	// Настроим мок для метода List, чтобы он возвращал пустой срез
-	mockRepo.On("List", ctx).Return([][]string{})
-
-	// Теперь тестируем получение списка метрик
-	metrics := service.ListMetrics(ctx)
-
-	// Проверка, что список пуст
-	assert.Len(t, metrics, 0)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUpdateMetric_SaveError_DefaultZero(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	mockRepo.On("Get", ctx, "counter", "test_metric").Return("", nil)
-	mockRepo.On("Save", ctx, "counter", "test_metric", "0").Return(errors.New("save error"))
-
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Counter, Value: "0"}
-	err := service.UpdateMetric(ctx, req)
-
-	assert.Error(t, err)
-	apiErr, ok := err.(*apierror.APIError)
-	assert.True(t, ok)
-	assert.Equal(t, http.StatusInternalServerError, apiErr.Code)
-	assert.Equal(t, "value is not saved", apiErr.Message)
-
-	mockRepo.AssertExpectations(t)
-}
-
-func TestUpdateMetric_SuccessfulGaugeFormat(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := MetricService{MetricRepository: mockRepo}
-	ctx := context.Background()
-
-	// Настроим мок для метода Get, чтобы он возвращал пустое значение
-	mockRepo.On("Get", ctx, "gauge", "test_metric").Return("", nil)
-
-	// Настроим мок для метода Save, чтобы он успешно сохранял метрику
-	mockRepo.On("Save", ctx, "gauge", "test_metric", "99.9").Return(nil)
-
-	// Создаем запрос с корректным значением для Gauge
-	req := &types.UpdateMetricValueRequest{Name: "test_metric", Type: types.Gauge, Value: "99.9"}
-
-	// Тестируем обновление метрики
-	err := service.UpdateMetric(ctx, req)
-
-	// Проверяем, что ошибка отсутствует
-	assert.NoError(t, err)
-
-	// Проверяем, что метод Save был вызван с правильными параметрами
 	mockRepo.AssertExpectations(t)
 }

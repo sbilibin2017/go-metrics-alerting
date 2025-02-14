@@ -1,119 +1,54 @@
 package services
 
 import (
-	"context"
 	"go-metrics-alerting/internal/types"
-	"go-metrics-alerting/pkg/apierror"
 	"net/http"
 	"strconv"
 )
-
-// MetricRepository — интерфейс хранилища метрик.
-type MetricSaverRepository interface {
-	Save(ctx context.Context, metricType, metricName, value string) error
-}
-
-// MetricRepository — интерфейс хранилища метрик.
-type MetricGetterRepository interface {
-	Get(ctx context.Context, metricType, metricName string) (string, error)
-}
-
-// MetricRepository — интерфейс хранилища метрик.
-type MetricListerRepository interface {
-	GetAll(ctx context.Context) [][]string
-}
-
-// MetricRepository — интерфейс хранилища метрик.
-type MetricRepository interface {
-	MetricSaverRepository
-	MetricGetterRepository
-	MetricListerRepository
-}
 
 const (
 	MetricEmptyString  string = ""
 	DefaultMetricValue string = "0"
 )
 
-// MetricService — сервис для работы с метриками.
-type MetricService struct {
-	MetricRepository MetricRepository
+// MetricRepository — интерфейс хранилища метрик.
+type MetricRepository interface {
+	Save(metricType, metricName, metricValue string)
+	Get(metricType, metricName string) (string, error)
+	GetAll() [][]string
 }
 
-// UpdateMetricValue обновляет значение метрики.
-func (s *MetricService) UpdateMetric(
-	ctx context.Context,
-	req *types.UpdateMetricValueRequest,
-) error {
-	// Проверка на отсутствие имени метрики
-	if req.Name == MetricEmptyString {
-		return &apierror.APIError{
-			Code:    http.StatusNotFound,
-			Message: "metric name is required",
-		}
-	}
+// MetricUpdateValueStrategy — интерфейс для стратегии обработки значения метрики.
+type metricUpdateValueStrategy interface {
+	update(currentValue, newValue string) string
+}
 
-	// Проверка на отсутствие имени метрики
-	if string(req.Type) == MetricEmptyString {
-		return &apierror.APIError{
-			Code:    http.StatusNotFound,
-			Message: "metric type is required",
-		}
-	}
+// MetricService — сервис для работы с метриками.
+type MetricService struct {
+	repo MetricRepository
+}
 
-	// Проверка на корректность типа метрики
-	if req.Type != types.Counter && req.Type != types.Gauge {
-		return &apierror.APIError{
-			Code:    http.StatusBadRequest,
-			Message: "invalid metric type",
-		}
+func NewMetricService(repo MetricRepository) *MetricService {
+	return &MetricService{
+		repo: repo,
 	}
+}
 
-	currentValue, err := s.MetricRepository.Get(ctx, string(req.Type), req.Name)
-	if err != nil {
+func (s *MetricService) UpdateMetric(req *types.UpdateMetricValueRequest) {
+	currentValue, err := s.repo.Get(string(req.Type), req.Name)
+	if err != nil || currentValue == MetricEmptyString {
 		currentValue = DefaultMetricValue
 	}
-
-	var value string
-	switch req.Type {
-	case types.Counter:
-		newVal, err := strconv.ParseInt(req.Value, 10, 64)
-		if err != nil {
-			return &apierror.APIError{
-				Code:    http.StatusBadRequest,
-				Message: "invalid counter value",
-			}
-		}
-		curVal, _ := strconv.ParseInt(currentValue, 10, 64)
-		newVal += curVal
-		value = strconv.FormatInt(newVal, 10)
-
-	case types.Gauge:
-		newVal, err := strconv.ParseFloat(req.Value, 64)
-		if err != nil {
-			return &apierror.APIError{
-				Code:    http.StatusBadRequest,
-				Message: "invalid gauge value",
-			}
-		}
-		value = strconv.FormatFloat(newVal, 'f', -1, 64)
-	}
-
-	err = s.MetricRepository.Save(ctx, string(req.Type), req.Name, value)
-	if err != nil {
-		return &apierror.APIError{
-			Code:    http.StatusInternalServerError,
-			Message: "value is not saved",
-		}
-	}
-	return nil
+	strategy := updateStrategies[req.Type]
+	value := strategy.update(currentValue, req.Value)
+	s.repo.Save(string(req.Type), req.Name, value)
 }
 
 // GetMetricValue возвращает значение метрики по имени и типу.
-func (s *MetricService) GetMetric(ctx context.Context, req *types.GetMetricValueRequest) (string, error) {
-	currentValue, err := s.MetricRepository.Get(ctx, string(req.Type), req.Name)
+func (s *MetricService) GetMetric(req *types.GetMetricValueRequest) (string, *types.APIErrorResponse) {
+	currentValue, err := s.repo.Get(string(req.Type), req.Name)
 	if err != nil {
-		return MetricEmptyString, &apierror.APIError{
+		return MetricEmptyString, &types.APIErrorResponse{
 			Code:    http.StatusNotFound,
 			Message: "value not found",
 		}
@@ -122,8 +57,8 @@ func (s *MetricService) GetMetric(ctx context.Context, req *types.GetMetricValue
 }
 
 // GetAllMetrics возвращает список всех метрик.
-func (s *MetricService) ListMetrics(ctx context.Context) []*types.MetricResponse {
-	metricsList := s.MetricRepository.GetAll(ctx)
+func (s *MetricService) ListMetrics() []*types.MetricResponse {
+	metricsList := s.repo.GetAll()
 	var metrics []*types.MetricResponse
 
 	if len(metricsList) == 0 {
@@ -138,4 +73,27 @@ func (s *MetricService) ListMetrics(ctx context.Context) []*types.MetricResponse
 	}
 
 	return metrics
+}
+
+var updateStrategies = map[types.MetricType]metricUpdateValueStrategy{
+	types.Counter: &counterUpdateStrategy{},
+	types.Gauge:   &gaugeUpdateStrategy{},
+}
+
+// CounterMetricStrategy — стратегия обработки значения для типа Counter.
+type counterUpdateStrategy struct{}
+
+func (s *counterUpdateStrategy) update(currentValue, newValue string) string {
+	curVal, _ := strconv.ParseInt(currentValue, 10, 64) // Игнорируем ошибку, так как валидация на это уже была
+	newVal, _ := strconv.ParseInt(newValue, 10, 64)     // Игнорируем ошибку, так как валидация на это уже была
+	newVal += curVal
+	return strconv.FormatInt(newVal, 10)
+}
+
+// GaugeMetricStrategy — стратегия обработки значения для типа Gauge.
+type gaugeUpdateStrategy struct{}
+
+func (s *gaugeUpdateStrategy) update(currentValue, newValue string) string {
+	newVal, _ := strconv.ParseFloat(newValue, 64) // Игнорируем ошибку, так как валидация на это уже была
+	return strconv.FormatFloat(newVal, 'f', -1, 64)
 }
