@@ -7,23 +7,23 @@ import (
 	"go.uber.org/zap"
 )
 
-// LoggerMiddleware логирует запросы и ответы.
+// LoggerMiddleware logs requests and responses.
 func LoggerMiddleware(logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Считываем данные запроса
+		// Record the start time
 		start := time.Now()
 
-		// Запоминаем URI и метод
+		// Capture the URI and method
 		uri := c.FullPath()
 		method := c.Request.Method
 
-		// Выполняем обработку запроса
+		// Process the request
 		c.Next()
 
-		// Вычисляем время выполнения запроса
+		// Calculate the request duration
 		duration := time.Since(start)
 
-		// Логируем данные
+		// Log the request details
 		logger.Info("Request processed",
 			zap.String("method", method),
 			zap.String("uri", uri),
