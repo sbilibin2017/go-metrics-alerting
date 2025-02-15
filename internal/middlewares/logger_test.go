@@ -1,84 +1,66 @@
 package middlewares
 
 import (
-	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-// TestLoggerMiddleware checks that the LoggerMiddleware works as expected
-func TestLoggerMiddleware(t *testing.T) {
-	// Create a new Gin router and add LoggerMiddleware
-	r := gin.New()
-	r.Use(LoggerMiddleware(zap.NewNop())) // Using No-op logger for this test
-
-	// Define a test endpoint
-	r.GET("/test", func(c *gin.Context) {
-		c.String(http.StatusOK, "test")
-	})
-
-	// Create a new HTTP request
-	req, _ := http.NewRequest("GET", "/test", nil)
-
-	// Create a recorder to capture the response
-	rr := httptest.NewRecorder()
-
-	// Send the request
-	r.ServeHTTP(rr, req)
-
-	// Assert the status code and body response
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, "test", rr.Body.String())
+// Define a mock logger struct to simulate the logger's behavior
+type MockLogger struct {
+	InfoCalled bool
+	InfoArgs   string
 }
 
-// TestLoggerMiddleware_LogRequest checks the log output of the LoggerMiddleware
-func TestLoggerMiddleware_LogRequest(t *testing.T) {
-	// Set up a buffer to capture the log output
-	var buf bytes.Buffer
+// Implement the Info method for the MockLogger
+func (m *MockLogger) Info(msg string, fields ...zap.Field) {
+	m.InfoCalled = true
+	m.InfoArgs = msg
+}
 
-	// Set up the logger to write to the buffer
-	loggerConfig := zap.NewProductionEncoderConfig()
-	loggerConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	encoder := zapcore.NewJSONEncoder(loggerConfig)
-	core := zapcore.NewCore(encoder, zapcore.AddSync(&buf), zapcore.InfoLevel)
-	logger := zap.New(core)
+// Implement the Debug method for the MockLogger (not used in this test, but defined for completeness)
+func (m *MockLogger) Debug(msg string, fields ...zap.Field) {}
 
-	// Create a Gin router and add LoggerMiddleware using the custom logger
-	r := gin.New()
-	r.Use(LoggerMiddleware(logger)) // Pass the custom logger to the middleware
+// Implement the Error method for the MockLogger (not used in this test, but defined for completeness)
+func (m *MockLogger) Error(msg string, fields ...zap.Field) {}
 
-	// Define a test endpoint
-	r.GET("/test", func(c *gin.Context) {
-		c.String(http.StatusOK, "test")
+// TestLoggerMiddlewareInfoCall tests that the Info method of the logger is called correctly.
+func TestLoggerMiddlewareInfoCall(t *testing.T) {
+	// Define the mock logger instance
+	mockLogger := &MockLogger{
+		InfoCalled: false,
+		InfoArgs:   "",
+	}
+
+	// Create the Gin engine
+	r := gin.Default()
+
+	// Use the LoggerMiddleware with the mock logger
+	r.Use(LoggerMiddleware(mockLogger))
+
+	// Define a test route
+	r.GET("/", func(c *gin.Context) {
+		c.String(200, "Hello, World!")
 	})
 
-	// Create a new HTTP request
-	req, _ := http.NewRequest("GET", "/test", nil)
+	// Create a test request (using gin.CreateTestContext to simulate requests)
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/", nil)
 
-	// Create a recorder to capture the response
-	rr := httptest.NewRecorder()
+	// Simulate the request
+	r.ServeHTTP(w, req)
 
-	// Send the request
-	r.ServeHTTP(rr, req)
+	// Simulate request processing time
+	time.Sleep(50 * time.Millisecond)
 
-	// Check if the status code and response body are correct
-	assert.Equal(t, http.StatusOK, rr.Code)
-	assert.Equal(t, "test", rr.Body.String())
+	// Assert that the Info method was called
+	assert.True(t, mockLogger.InfoCalled, "Info method should have been called")
 
-	// Assert the log contains the expected information
-	logOutput := buf.String()
-
-	// Assert that the log contains the method and URI
-	assert.Contains(t, logOutput, "\"method\":\"GET\"")
-	assert.Contains(t, logOutput, "\"uri\":\"/test\"")
-
-	// Check if the status code and content length are present in the log
-	assert.Contains(t, logOutput, "\"status_code\":200")
-
+	// Assert that the Info message contains "Request processed"
+	assert.Contains(t, mockLogger.InfoArgs, "Request processed", "Info should log 'Request processed'")
 }

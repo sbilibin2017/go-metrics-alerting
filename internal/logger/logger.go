@@ -1,51 +1,53 @@
 package logger
 
 import (
-	"os"
+	"go-metrics-alerting/internal/configs" // Make sure to import the correct package for your LoggerConfig
 
 	"go.uber.org/zap"
 )
 
-// Переменная для хранения логгера
-var logger *zap.Logger
+// Logger is an implementation of the Logger interface using zap.
+type Logger struct {
+	logger *zap.Logger
+}
 
-// init конфигурирует логгер на основе переменных окружения.
-func init() {
-	// Получаем уровень логирования из переменной окружения
-	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "" {
-		logLevel = "INFO" // По умолчанию INFO
-	}
+// NewLogger creates a new Logger instance based on the provided configuration.
+func NewLogger(config *configs.LoggerConfig) (*Logger, error) {
+	var zapConfig zap.Config
 
-	// Конфигурируем логгер для JSON-формата
-	zapConfig := zap.NewProductionConfig()
-
-	// Устанавливаем уровень логирования в зависимости от конфигурации
-	switch logLevel {
-	case "DEBUG":
+	// Set the zap config based on the log level from the config
+	switch config.LogLevel {
+	case configs.DEBUG:
+		zapConfig = zap.NewDevelopmentConfig()
 		zapConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
-	case "ERROR":
+	case configs.ERROR:
+		zapConfig = zap.NewProductionConfig()
 		zapConfig.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
-	default:
+	default: // INFO as default
+		zapConfig = zap.NewProductionConfig()
 		zapConfig.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 	}
 
-	// Создаем логгер с указанной конфигурацией
-	logger, _ = zapConfig.Build(zap.AddCaller(), zap.AddCallerSkip(1)) // Добавляем информацию о месте вызова
+	// Create the zap logger with the configured settings
+	logger, err := zapConfig.Build(zap.AddCaller(), zap.AddCallerSkip(1))
+	if err != nil {
+		return nil, err
+	}
 
+	return &Logger{logger: logger}, nil
 }
 
-// Debug логирует сообщения уровня Debug.
-func Debug(msg string, fields ...zap.Field) {
-	logger.Debug(msg, fields...)
+// Info logs a message at the Info level.
+func (l *Logger) Info(msg string, fields ...zap.Field) {
+	l.logger.Info(msg, fields...)
 }
 
-// Info логирует сообщения уровня Info.
-func Info(msg string, fields ...zap.Field) {
-	logger.Info(msg, fields...)
+// Debug logs a message at the Debug level.
+func (l *Logger) Debug(msg string, fields ...zap.Field) {
+	l.logger.Debug(msg, fields...)
 }
 
-// Error логирует сообщения уровня Error.
-func Error(msg string, fields ...zap.Field) {
-	logger.Error(msg, fields...)
+// Error logs a message at the Error level.
+func (l *Logger) Error(msg string, fields ...zap.Field) {
+	l.logger.Error(msg, fields...)
 }
