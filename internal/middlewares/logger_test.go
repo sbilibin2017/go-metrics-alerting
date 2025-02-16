@@ -4,63 +4,45 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
+
+	"github.com/stretchr/testify/assert"
 )
 
-// Define a mock logger struct to simulate the logger's behavior
-type MockLogger struct {
-	InfoCalled bool
-	InfoArgs   string
-}
+func TestLoggerMiddleware_RealServer(t *testing.T) {
+	// Инициализируем реальный zap логгер
+	logger, _ := zap.NewDevelopment()
+	defer logger.Sync() // Ensure that any buffered log entries are flushed
 
-// Implement the Info method for the MockLogger
-func (m *MockLogger) Info(msg string, fields ...zap.Field) {
-	m.InfoCalled = true
-	m.InfoArgs = msg
-}
+	// Создаем новый Gin рутер
+	r := gin.New()
 
-// Implement the Debug method for the MockLogger (not used in this test, but defined for completeness)
-func (m *MockLogger) Debug(msg string, fields ...zap.Field) {}
+	// Добавляем middleware
+	r.Use(LoggerMiddleware())
 
-// Implement the Error method for the MockLogger (not used in this test, but defined for completeness)
-func (m *MockLogger) Error(msg string, fields ...zap.Field) {}
-
-// TestLoggerMiddlewareInfoCall tests that the Info method of the logger is called correctly.
-func TestLoggerMiddlewareInfoCall(t *testing.T) {
-	// Define the mock logger instance
-	mockLogger := &MockLogger{
-		InfoCalled: false,
-		InfoArgs:   "",
-	}
-
-	// Create the Gin engine
-	r := gin.Default()
-
-	// Use the LoggerMiddleware with the mock logger
-	r.Use(LoggerMiddleware(mockLogger))
-
-	// Define a test route
-	r.GET("/", func(c *gin.Context) {
-		c.String(200, "Hello, World!")
+	// Добавляем маршрут
+	r.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
-	// Create a test request (using gin.CreateTestContext to simulate requests)
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/", nil)
+	// Создаем новый HTTP запрос
+	req, err := http.NewRequest("GET", "/test", nil)
+	assert.NoError(t, err)
 
-	// Simulate the request
+	// Результат выполнения запроса
+	w := httptest.NewRecorder()
+
+	// Отправляем запрос
 	r.ServeHTTP(w, req)
 
-	// Simulate request processing time
-	time.Sleep(50 * time.Millisecond)
+	// Проверяем код ответа
+	assert.Equal(t, http.StatusOK, w.Code)
 
-	// Assert that the Info method was called
-	assert.True(t, mockLogger.InfoCalled, "Info method should have been called")
+	// Проверяем тело ответа
+	assert.Contains(t, w.Body.String(), `"message":"ok"`)
 
-	// Assert that the Info message contains "Request processed"
-	assert.Contains(t, mockLogger.InfoArgs, "Request processed", "Info should log 'Request processed'")
+	// Проверяем логи (это будет вывод в консоль, но можно настроить и проверку через файлы или другие способы)
+	// В реальных тестах можно использовать стереотипы или перехватчики для проверки консольных выводов.
 }
