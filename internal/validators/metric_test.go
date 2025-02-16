@@ -2,142 +2,89 @@ package validators
 
 import (
 	"go-metrics-alerting/internal/types"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateMetrics(t *testing.T) {
+func TestValidateID(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    *types.MetricsRequest
-		expected *types.APIErrorResponse
+		name    string
+		id      string
+		wantErr error
 	}{
-		{
-			name: "Valid counter metric with delta",
-			input: &types.MetricsRequest{
-				ID:    "metric1",
-				MType: types.Counter,
-				Delta: new(int64),
-				Value: nil,
-			},
-			expected: nil,
-		},
-		{
-			name: "Valid gauge metric with value",
-			input: &types.MetricsRequest{
-				ID:    "metric2",
-				MType: types.Gauge,
-				Delta: nil,
-				Value: new(float64),
-			},
-			expected: nil,
-		},
-		{
-			name: "Missing ID",
-			input: &types.MetricsRequest{
-				ID:    "",
-				MType: types.Counter,
-				Delta: new(int64),
-				Value: nil,
-			},
-			expected: types.NewAPIErrorResponse(http.StatusNotFound, ErrIDRequired),
-		},
-		{
-			name: "Missing Metric Type",
-			input: &types.MetricsRequest{
-				ID:    "metric3",
-				MType: "",
-				Delta: new(int64),
-				Value: nil,
-			},
-			expected: types.NewAPIErrorResponse(http.StatusNotFound, ErrMTypeRequired),
-		},
-		{
-			name: "Invalid Metric Type",
-			input: &types.MetricsRequest{
-				ID:    "metric4",
-				MType: types.MType("invalid"),
-				Delta: new(int64),
-				Value: nil,
-			},
-			expected: types.NewAPIErrorResponse(http.StatusBadRequest, ErrInvalidMetricType),
-		},
-		{
-			name: "Missing delta for counter",
-			input: &types.MetricsRequest{
-				ID:    "metric5",
-				MType: types.Counter,
-				Delta: nil,
-				Value: nil,
-			},
-			expected: types.NewAPIErrorResponse(http.StatusBadRequest, ErrDeltaRequired),
-		},
-		{
-			name: "Missing value for gauge",
-			input: &types.MetricsRequest{
-				ID:    "metric6",
-				MType: types.Gauge,
-				Delta: nil,
-				Value: nil,
-			},
-			expected: types.NewAPIErrorResponse(http.StatusBadRequest, ErrValueRequired),
-		},
+		{"Valid ID", "metric1", nil},
+		{"Empty ID", EmptyString, ErrIDEmpty},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ValidateMetrics(tt.input)
-			assert.Equal(t, tt.expected, result)
+			err := ValidateID(tt.id)
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
 
-func TestValidateMetricValueRequest(t *testing.T) {
+func TestValidateMType(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    *types.MetricValueRequest
-		expected *types.APIErrorResponse
+		name    string
+		mType   types.MType
+		wantErr error
 	}{
-		{
-			name: "Valid metric value request",
-			input: &types.MetricValueRequest{
-				ID:    "metric1",
-				MType: types.Counter,
-			},
-			expected: nil,
-		},
-		{
-			name: "Missing ID",
-			input: &types.MetricValueRequest{
-				ID:    "",
-				MType: types.Counter,
-			},
-			expected: types.NewAPIErrorResponse(http.StatusNotFound, ErrIDRequired),
-		},
-		{
-			name: "Missing Metric Type",
-			input: &types.MetricValueRequest{
-				ID:    "metric2",
-				MType: "",
-			},
-			expected: types.NewAPIErrorResponse(http.StatusNotFound, ErrMTypeRequired),
-		},
-		{
-			name: "Invalid Metric Type",
-			input: &types.MetricValueRequest{
-				ID:    "metric3",
-				MType: types.MType("invalid"),
-			},
-			expected: types.NewAPIErrorResponse(http.StatusBadRequest, ErrInvalidMetricType),
-		},
+		{"Valid Counter", types.Counter, nil},
+		{"Valid Gauge", types.Gauge, nil},
+		{"Empty MType", "", ErrMTypeEmpty},
+		{"Invalid MType", "invalid", ErrMTypeInvalid},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ValidateMetricValueRequest(tt.input)
-			assert.Equal(t, tt.expected, result)
+			err := ValidateMType(tt.mType)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestValidateDelta(t *testing.T) {
+	var validDelta int64 = 100
+
+	tests := []struct {
+		name    string
+		mType   types.MType
+		delta   *int64
+		wantErr error
+	}{
+		{"Valid Counter with Delta", types.Counter, &validDelta, nil},
+		{"Counter without Delta", types.Counter, nil, ErrDeltaEmpty},
+		{"Gauge without Delta", types.Gauge, nil, nil}, // Delta не требуется для Gauge
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDelta(tt.mType, tt.delta)
+			assert.ErrorIs(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestValidateValue(t *testing.T) {
+	var validValue float64 = 99.99
+
+	tests := []struct {
+		name    string
+		mType   types.MType
+		value   *float64
+		wantErr error
+	}{
+		{"Valid Gauge with Value", types.Gauge, &validValue, nil},
+		{"Gauge without Value", types.Gauge, nil, ErrValueEmpty},
+		{"Counter without Value", types.Counter, nil, nil}, // Value не требуется для Counter
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateValue(tt.mType, tt.value)
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }

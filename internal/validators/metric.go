@@ -1,74 +1,55 @@
 package validators
 
 import (
+	"errors"
 	"go-metrics-alerting/internal/types"
-	"net/http"
 )
 
-// Константы сообщений об ошибках
 const (
-	ErrIDRequired        = "ID is required"
-	ErrMTypeRequired     = "Metric type is required"
-	ErrInvalidMetricType = "Invalid metric type, must be 'counter' or 'gauge'"
-	ErrDeltaRequired     = "Delta is required for 'counter' type"
-	ErrValueRequired     = "Value is required for 'gauge' type"
+	// EmptyString - пустая строка для проверки.
+	EmptyString = ""
 )
 
-// ValidateMetrics выполняет валидацию структуры Metrics
-func ValidateMetrics(m *types.MetricsRequest) *types.APIErrorResponse {
-	if isIDEmpty(m.ID) {
-		return types.NewAPIErrorResponse(http.StatusNotFound, ErrIDRequired)
-	}
-	if isMTypeEmpty(m.MType) {
-		return types.NewAPIErrorResponse(http.StatusNotFound, ErrMTypeRequired)
-	}
-	if isMTypeInvalid(m.MType) {
-		return types.NewAPIErrorResponse(http.StatusBadRequest, ErrInvalidMetricType)
-	}
-	if isDeltaEmpty(m.MType, m.Delta) {
-		return types.NewAPIErrorResponse(http.StatusBadRequest, ErrDeltaRequired)
-	}
-	if isValueEmpty(m.MType, m.Value) {
-		return types.NewAPIErrorResponse(http.StatusBadRequest, ErrValueRequired)
+// Переменные для ошибок с использованием errors.New
+var (
+	ErrIDEmpty      = errors.New("id cannot be empty")
+	ErrMTypeEmpty   = errors.New("mtype cannot be empty")
+	ErrMTypeInvalid = errors.New("mtype must be either 'counter' or 'gauge'")
+	ErrDeltaEmpty   = errors.New("delta must be provided for Counter metrics")
+	ErrValueEmpty   = errors.New("value must be provided for Gauge metrics")
+)
+
+// validateID проверяет, что ID метрики не пустой.
+func ValidateID(id string) error {
+	if id == EmptyString {
+		return ErrIDEmpty
 	}
 	return nil
 }
 
-// ValidateMetricValueRequest выполняет валидацию структуры MetricValueRequest
-func ValidateMetricValueRequest(m *types.MetricValueRequest) *types.APIErrorResponse {
-	if isIDEmpty(m.ID) {
-		return types.NewAPIErrorResponse(http.StatusNotFound, ErrIDRequired)
+// validateMType проверяет, что MType не пустой и имеет корректное значение.
+func ValidateMType(mType types.MType) error {
+	if string(mType) == EmptyString {
+		return ErrMTypeEmpty
 	}
-	if isMTypeEmpty(m.MType) {
-		return types.NewAPIErrorResponse(http.StatusNotFound, ErrMTypeRequired)
-	}
-	if isMTypeInvalid(m.MType) {
-		return types.NewAPIErrorResponse(http.StatusBadRequest, ErrInvalidMetricType)
+	if mType != types.Counter && mType != types.Gauge {
+		return ErrMTypeInvalid
 	}
 	return nil
 }
 
-// Проверяет, что ID не пустой
-func isIDEmpty(id string) bool {
-	return id == types.EmptyString
+// validateDelta проверяет, что Delta указана для типа Counter.
+func ValidateDelta(mtype types.MType, delta *int64) error {
+	if mtype == types.Counter && delta == nil {
+		return ErrDeltaEmpty
+	}
+	return nil
 }
 
-// Проверяет, что MType не пустой
-func isMTypeEmpty(mType types.MType) bool {
-	return string(mType) == types.EmptyString
-}
-
-// Проверяет, что MType имеет корректное значение
-func isMTypeInvalid(mType types.MType) bool {
-	return mType != types.Counter && mType != types.Gauge
-}
-
-// Проверяет, что Delta указана для типа Counter
-func isDeltaEmpty(mtype types.MType, delta *int64) bool {
-	return mtype == types.Counter && delta == nil
-}
-
-// Проверяет, что Value указан для типа Gauge
-func isValueEmpty(mtype types.MType, value *float64) bool {
-	return mtype == types.Gauge && value == nil
+// validateValue проверяет, что Value указана для типа Gauge.
+func ValidateValue(mtype types.MType, value *float64) error {
+	if mtype == types.Gauge && value == nil {
+		return ErrValueEmpty
+	}
+	return nil
 }
