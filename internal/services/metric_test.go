@@ -3,158 +3,230 @@ package services
 import (
 	"errors"
 	"go-metrics-alerting/internal/types"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-// MockMetricRepository имитирует поведение хранилища метрик.
-type MockMetricRepository struct {
+// MockGetter реализует интерфейс Getter для тестирования
+type MockGetter struct {
 	mock.Mock
 }
 
-func (m *MockMetricRepository) Save(metricType, metricName, metricValue string) {
-	m.Called(metricType, metricName, metricValue)
-}
-
-func (m *MockMetricRepository) Get(metricType, metricName string) (string, error) {
-	args := m.Called(metricType, metricName)
+func (m *MockGetter) Get(key string) (string, error) {
+	args := m.Called(key)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockMetricRepository) GetAll() [][]string {
-	args := m.Called()
-	return args.Get(0).([][]string)
+// MockSetter реализует интерфейс Setter для тестирования
+type MockSetter struct {
+	mock.Mock
 }
 
-func TestUpdateMetric_Success_GaugeType(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := NewMetricService(mockRepo)
+func (m *MockSetter) Set(key string, value string) error {
+	args := m.Called(key, value)
+	return args.Error(0)
+}
 
-	req := &types.UpdateMetricValueRequest{
-		Name:  "metric1",
-		Type:  types.Gauge,
-		Value: "10.5", // New value to replace the current value
+// MockRanger реализует интерфейс Ranger для тестирования
+type MockRanger struct {
+	mock.Mock
+}
+
+func (m *MockRanger) Range(callback func(key string, value string) bool) {
+	m.Called(callback)
+}
+
+// --- Тесты для UpdateMetricService ---
+
+func TestUpdateMetric_Counter_Success(t *testing.T) {
+	mockGetter := new(MockGetter)
+	mockSetter := new(MockSetter)
+	service := NewUpdateMetricService(mockGetter, mockSetter)
+
+	mockGetter.On("Get", "counter_metric").Return("10", nil)
+	mockSetter.On("Set", "counter_metric", "20").Return(nil)
+
+	delta := int64(10)
+	req := &types.MetricsRequest{
+		ID:    "counter_metric",
+		MType: types.Counter,
+		Delta: &delta,
 	}
 
-	// Mock the Get method to return an existing value for the metric (e.g., 5.5)
-	mockRepo.On("Get", string(types.Gauge), "metric1").Return("5.5", nil).Once()
+	resp, err := service.UpdateMetric(req)
 
-	// Mock the Save method to save the new value (replacing the old one)
-	mockRepo.On("Save", string(types.Gauge), "metric1", "10.5").Return().Once()
-
-	// Call the UpdateMetric method
-	service.UpdateMetric(req)
-
-	// Assert that the repository expectations are met (i.e., Get and Save were called correctly)
-	mockRepo.AssertExpectations(t)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, int64(20), *resp.Delta)
+	mockGetter.AssertExpectations(t)
+	mockSetter.AssertExpectations(t)
 }
 
-func TestUpdateMetric_RepoReturnsEmpty_FallsBackToDefault(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := NewMetricService(mockRepo)
+func TestUpdateMetric_Counter_NotFound(t *testing.T) {
+	mockGetter := new(MockGetter)
+	mockSetter := new(MockSetter)
+	service := NewUpdateMetricService(mockGetter, mockSetter)
 
-	req := &types.UpdateMetricValueRequest{
-		Name:  "metric1",
-		Type:  types.Counter,
-		Value: "10",
+	mockGetter.On("Get", "counter_metric").Return("", errors.New("not found"))
+	mockSetter.On("Set", "counter_metric", "10").Return(nil)
+
+	delta := int64(10)
+	req := &types.MetricsRequest{
+		ID:    "counter_metric",
+		MType: types.Counter,
+		Delta: &delta,
 	}
 
-	// Mock the Get method to return an empty string (MetricEmptyString)
-	mockRepo.On("Get", string(types.Counter), "metric1").Return(MetricEmptyString, nil).Once()
+	resp, err := service.UpdateMetric(req)
 
-	// Mock the Save method to do nothing (i.e., no error returned)
-	mockRepo.On("Save", string(types.Counter), "metric1", "10").Return().Once()
-
-	// Call the UpdateMetric method
-	service.UpdateMetric(req)
-
-	// Assert that the fallback logic worked (the value should be set to DefaultMetricValue)
-	mockRepo.AssertExpectations(t)
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, int64(10), *resp.Delta)
+	mockGetter.AssertExpectations(t)
+	mockSetter.AssertExpectations(t)
 }
 
-func TestNewMetricService(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := NewMetricService(mockRepo)
-	assert.NotNil(t, service)
-	assert.Equal(t, mockRepo, service.repo)
+func TestUpdateMetric_Gauge_Success(t *testing.T) {
+	mockGetter := new(MockGetter)
+	mockSetter := new(MockSetter)
+	service := NewUpdateMetricService(mockGetter, mockSetter)
+
+	// Ожидаем вызова метода Get, чтобы предотвратить ошибку
+	mockGetter.On("Get", "gauge_metric").Return("0", nil)
+	mockSetter.On("Set", "gauge_metric", "15.5").Return(nil)
+
+	value := 15.5
+	req := &types.MetricsRequest{
+		ID:    "gauge_metric",
+		MType: types.Gauge,
+		Value: &value,
+	}
+
+	resp, err := service.UpdateMetric(req)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, 15.5, *resp.Value)
+	mockGetter.AssertExpectations(t)
+	mockSetter.AssertExpectations(t)
 }
+
+// --- Тесты для GetMetricService ---
 
 func TestGetMetric_Success(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := NewMetricService(mockRepo)
+	mockGetter := new(MockGetter)
+	service := NewGetMetricService(mockGetter)
 
-	mockRepo.On("Get", string(types.Counter), "metric1").Return("10", nil)
+	mockGetter.On("Get", "metric_1").Return("42", nil)
 
-	value, err := service.GetMetric(&types.GetMetricValueRequest{
-		Name: "metric1",
-		Type: types.Counter,
-	})
+	req := &types.MetricsRequest{ID: "metric_1"}
+	value, err := service.GetMetric(req)
 
-	// Check for no error
-	assert.Nil(t, err)
-	// Assert that the value returned is correct
-	assert.Equal(t, "10", value)
-	mockRepo.AssertExpectations(t)
+	assert.NoError(t, err)
+	assert.NotNil(t, value)
+	assert.Equal(t, "42", *value)
+	mockGetter.AssertExpectations(t)
 }
 
-func TestGetMetric_Error(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := NewMetricService(mockRepo)
+func TestGetMetric_NotFound(t *testing.T) {
+	mockGetter := new(MockGetter)
+	service := NewGetMetricService(mockGetter)
 
-	// Simulate an error scenario
-	mockRepo.On("Get", string(types.Counter), "metric1").Return("", errors.New("not found"))
+	mockGetter.On("Get", "metric_1").Return("", errors.New("not found"))
 
-	// Call the GetMetric method
-	value, errResp := service.GetMetric(&types.GetMetricValueRequest{
-		Name: "metric1",
-		Type: types.Counter,
-	})
+	req := &types.MetricsRequest{ID: "metric_1"}
+	value, err := service.GetMetric(req)
 
-	// Check that an error response is returned
-	assert.Equal(t, "", value)
-	assert.NotNil(t, errResp)
-	assert.Equal(t, http.StatusNotFound, errResp.Code)
-	assert.Equal(t, "value not found", errResp.Message)
-
-	mockRepo.AssertExpectations(t)
+	assert.Error(t, err)
+	assert.Nil(t, value)
+	assert.Equal(t, ErrMetricIsNotFound, err)
+	mockGetter.AssertExpectations(t)
 }
+
+// --- Тесты для ListMetricsService ---
 
 func TestListMetrics_Success(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := NewMetricService(mockRepo)
+	mockRanger := new(MockRanger)
+	service := NewListMetricsService(mockRanger)
 
-	// Mock GetAll to return a list of metrics
-	mockRepo.On("GetAll").Return([][]string{
-		{"counter", "metric1", "10"},
-		{"gauge", "metric2", "3.14"},
-	})
+	mockRanger.On("Range", mock.Anything).Run(func(args mock.Arguments) {
+		callback := args.Get(0).(func(string, string) bool)
+		callback("metric_1", "42")
+		callback("metric_2", "3.14")
+	}).Return()
 
 	metrics := service.ListMetrics()
 
-	// Assert that the correct number of metrics is returned
 	assert.Len(t, metrics, 2)
-	// Assert that the metric names and values are correct
-	assert.Equal(t, "metric1", metrics[0].Name)
-	assert.Equal(t, "10", metrics[0].Value)
-	assert.Equal(t, "metric2", metrics[1].Name)
+	assert.Equal(t, "metric_1", metrics[0].ID)
+	assert.Equal(t, "42", metrics[0].Value)
+	assert.Equal(t, "metric_2", metrics[1].ID)
 	assert.Equal(t, "3.14", metrics[1].Value)
-
-	mockRepo.AssertExpectations(t)
+	mockRanger.AssertExpectations(t)
 }
 
-func TestListMetrics_Empty(t *testing.T) {
-	mockRepo := new(MockMetricRepository)
-	service := NewMetricService(mockRepo)
+func TestUpdateMetric_SetterError(t *testing.T) {
+	mockGetter := new(MockGetter)
+	mockSetter := new(MockSetter)
+	service := NewUpdateMetricService(mockGetter, mockSetter)
 
-	// Mock GetAll to return an empty list of metrics
-	mockRepo.On("GetAll").Return([][]string{})
+	// Настройка для Get, чтобы возвращать значение "0" для метрики
+	mockGetter.On("Get", "counter_metric").Return("0", nil)
 
-	metrics := service.ListMetrics()
+	// Настройка для Set, чтобы он возвращал ошибку
+	mockSetter.On("Set", "counter_metric", "10").Return(errors.New("DB error"))
 
-	// Assert that the returned metrics list is empty
-	assert.Len(t, metrics, 0)
-	mockRepo.AssertExpectations(t)
+	// Запрос на обновление метрики
+	delta := int64(10)
+	req := &types.MetricsRequest{
+		ID:    "counter_metric",
+		MType: types.Counter,
+		Delta: &delta,
+	}
+
+	// Выполнение метода
+	resp, err := service.UpdateMetric(req)
+
+	// Проверка, что произошла ошибка
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, ErrMetricIsNotUpdated, err)
+
+	// Проверка, что все ожидания на моки выполнены
+	mockGetter.AssertExpectations(t)
+	mockSetter.AssertExpectations(t)
+}
+
+func TestUpdateMetric_Gauge_SetterError(t *testing.T) {
+	mockGetter := new(MockGetter)
+	mockSetter := new(MockSetter)
+	service := NewUpdateMetricService(mockGetter, mockSetter)
+
+	// Настройка для Get, чтобы возвращать значение "0" для метрики
+	mockGetter.On("Get", "gauge_metric").Return("0", nil)
+
+	// Настройка для Set, чтобы он возвращал ошибку
+	mockSetter.On("Set", "gauge_metric", "15.5").Return(errors.New("DB error"))
+
+	// Запрос на обновление метрики
+	value := 15.5
+	req := &types.MetricsRequest{
+		ID:    "gauge_metric",
+		MType: types.Gauge,
+		Value: &value,
+	}
+
+	// Выполнение метода
+	resp, err := service.UpdateMetric(req)
+
+	// Проверка, что произошла ошибка
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, ErrMetricIsNotUpdated, err)
+
+	// Проверка, что все ожидания на моки выполнены
+	mockGetter.AssertExpectations(t)
+	mockSetter.AssertExpectations(t)
 }

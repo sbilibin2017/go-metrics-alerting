@@ -1,96 +1,116 @@
 package services
 
 import (
+	"errors"
 	"go-metrics-alerting/internal/types"
-	"net/http"
 	"strconv"
 )
 
-const (
-	MetricEmptyString  = ""
-	DefaultMetricValue = "0"
+var (
+	ErrMetricIsNotUpdated error = errors.New("metric is not updated")
+	ErrMetricIsNotFound   error = errors.New("metric is not found")
 )
 
-// MetricRepository — интерфейс хранилища метрик.
-type MetricRepository interface {
-	Save(metricType, metricName, metricValue string)
-	Get(metricType, metricName string) (string, error)
-	GetAll() [][]string
+type Setter interface {
+	Set(key string, value string) error
 }
 
-// MetricUpdateValueStrategy — интерфейс для стратегии обработки значения метрики.
-type MetricUpdateValueStrategy interface {
-	Update(currentValue, newValue string) string
+type Getter interface {
+	Get(key string) (string, error)
 }
 
-// MetricService — сервис для работы с метриками.
-type MetricService struct {
-	repo       MetricRepository
-	strategies map[types.MetricType]MetricUpdateValueStrategy
+type Ranger interface {
+	Range(callback func(key string, value string) bool)
 }
 
-func NewMetricService(repo MetricRepository) *MetricService {
-	return &MetricService{
-		repo: repo,
-		strategies: map[types.MetricType]MetricUpdateValueStrategy{
-			types.Counter: &CounterMetricStrategy{},
-			types.Gauge:   &GaugeMetricStrategy{},
-		},
+// UpdateMetricService сервис для обновления метрик.
+type UpdateMetricService struct {
+	stringGetter Getter
+	stringSetter Setter
+}
+
+// NewUpdateMetricService создаёт новый сервис для обновления метрик.
+func NewUpdateMetricService(
+	stringGetter Getter,
+	stringSetter Setter,
+) *UpdateMetricService {
+	return &UpdateMetricService{
+		stringGetter: stringGetter,
+		stringSetter: stringSetter,
 	}
 }
 
-func (s *MetricService) UpdateMetric(req *types.UpdateMetricValueRequest) {
-	currentValue, err := s.repo.Get(string(req.Type), req.Name)
-	if err != nil || currentValue == MetricEmptyString {
-		currentValue = DefaultMetricValue
-	}
-	if strategy, ok := s.strategies[req.Type]; ok {
-		value := strategy.Update(currentValue, req.Value)
-		s.repo.Save(string(req.Type), req.Name, value)
-	}
-}
-
-// GetMetric возвращает значение метрики по имени и типу.
-func (s *MetricService) GetMetric(req *types.GetMetricValueRequest) (string, *types.APIErrorResponse) {
-	currentValue, err := s.repo.Get(string(req.Type), req.Name)
+// UpdateMetric обновляет или сохраняет метрику в зависимости от её типа.
+func (s *UpdateMetricService) UpdateMetric(req *types.MetricsRequest) (*types.MetricsResponse, error) {
+	currentValue, err := s.stringGetter.Get(req.ID)
 	if err != nil {
-		return MetricEmptyString, &types.APIErrorResponse{
-			Code:    http.StatusNotFound,
-			Message: "value not found",
+		currentValue = "0"
+	}
+
+	switch req.MType {
+	case types.Counter:
+		intValue, _ := strconv.ParseInt(currentValue, 10, 64)
+		*req.Delta += intValue
+		err := s.stringSetter.Set(req.ID, strconv.FormatInt(*req.Delta, 10))
+		if err != nil {
+			return nil, ErrMetricIsNotUpdated
+		}
+	case types.Gauge:
+		err := s.stringSetter.Set(req.ID, strconv.FormatFloat(*req.Value, 'f', -1, 64))
+		if err != nil {
+			return nil, ErrMetricIsNotUpdated
 		}
 	}
-	return currentValue, nil
+
+	return &types.MetricsResponse{MetricsRequest: *req}, nil
+}
+
+// GetMetricService сервис для получения метрик.
+type GetMetricService struct {
+	stringGetter Getter
+}
+
+// NewGetMetricService создаёт новый сервис для получения метрик.
+func NewGetMetricService(
+	stringGetter Getter,
+) *GetMetricService {
+	return &GetMetricService{
+		stringGetter: stringGetter,
+	}
+}
+
+// GetMetric получает метрику по её ID.
+func (s *GetMetricService) GetMetric(metric *types.MetricsRequest) (*string, error) {
+	value, err := s.stringGetter.Get(metric.ID)
+	if err != nil {
+		return nil, ErrMetricIsNotFound
+	}
+	return &value, nil
+}
+
+// ListMetricsService сервис для получения списка метрик.
+type ListMetricsService struct {
+	stringRanger Ranger
+}
+
+// NewListMetricsService создаёт новый сервис для получения списка метрик.
+func NewListMetricsService(
+	stringRanger Ranger,
+) *ListMetricsService {
+	return &ListMetricsService{
+		stringRanger: stringRanger,
+	}
 }
 
 // ListMetrics возвращает список всех метрик.
-func (s *MetricService) ListMetrics() []*types.MetricResponse {
-	metricsList := s.repo.GetAll()
-	var metrics []*types.MetricResponse
-
-	for _, metric := range metricsList {
-		metrics = append(metrics, &types.MetricResponse{
-			Name:  metric[1],
-			Value: metric[2],
+func (s *ListMetricsService) ListMetrics() []*types.MetricValueResponse {
+	var metrics []*types.MetricValueResponse
+	s.stringRanger.Range(func(key string, value string) bool {
+		metrics = append(metrics, &types.MetricValueResponse{
+			ID:    key,
+			Value: value,
 		})
-	}
-
+		return true
+	})
 	return metrics
-}
-
-// CounterMetricStrategy — стратегия обработки значения для типа Counter.
-type CounterMetricStrategy struct{}
-
-func (s *CounterMetricStrategy) Update(currentValue, newValue string) string {
-	curVal, _ := strconv.ParseInt(currentValue, 10, 64) // Игнорируем ошибку, так как валидация уже была
-	newVal, _ := strconv.ParseInt(newValue, 10, 64)     // Игнорируем ошибку, так как валидация уже была
-	newVal += curVal
-	return strconv.FormatInt(newVal, 10)
-}
-
-// GaugeMetricStrategy — стратегия обработки значения для типа Gauge.
-type GaugeMetricStrategy struct{}
-
-func (s *GaugeMetricStrategy) Update(currentValue, newValue string) string {
-	newVal, _ := strconv.ParseFloat(newValue, 64) // Игнорируем ошибку, так как валидация уже была
-	return strconv.FormatFloat(newVal, 'f', -1, 64)
 }
