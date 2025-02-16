@@ -1,49 +1,66 @@
 package storage
 
 import (
-	"errors"
 	"sync"
 )
 
-const (
-	StorageEmptyString string = ""
-)
-
-var (
-	ErrContextDone   = errors.New("context done")
-	ErrValueNotFound = errors.New("value not found")
-)
-
-// Storage реализует интерфейс хранилища, используя map и sync.RWMutex.
-type MemStorage struct {
+// Storage является основным хранилищем данных с синхронизацией, поддерживающим обобщённые типы.
+type Storage struct {
 	data map[string]string
 	mu   sync.RWMutex
 }
 
-func NewMemStorage() *MemStorage {
-	return &MemStorage{data: make(map[string]string)}
+// NewStorage создаёт и возвращает новое хранилище для любого типа данных.
+func NewStorage() *Storage {
+	return &Storage{
+		data: make(map[string]string),
+	}
 }
 
-// Set добавляет пару ключ-значение в хранилище.
-func (s *MemStorage) Set(key, value string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.data[key] = value
+// Setter управляет операцией записи в хранилище.
+type Setter struct {
+	storage *Storage
 }
 
-// Get извлекает значение по ключу.
-func (s *MemStorage) Get(key string) (string, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	value, ok := s.data[key]
-	return value, ok
+func NewSetter(storage *Storage) *Setter {
+	return &Setter{storage: storage}
 }
 
-// Range перебирает все пары ключ-значение.
-func (s *MemStorage) Range(callback func(key, value string) bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	for key, value := range s.data {
+func (s *Setter) Set(key string, value string) {
+	s.storage.mu.Lock()
+	defer s.storage.mu.Unlock()
+	s.storage.data[key] = value
+}
+
+// Getter управляет операцией чтения из хранилища.
+type Getter struct {
+	storage *Storage
+}
+
+func NewGetter(storage *Storage) *Getter {
+	return &Getter{storage: storage}
+}
+
+func (g *Getter) Get(key string) (string, bool) {
+	g.storage.mu.RLock()
+	defer g.storage.mu.RUnlock()
+	value, exists := g.storage.data[key]
+	return value, exists
+}
+
+// Ranger управляет операцией перебора элементов в хранилище.
+type Ranger struct {
+	storage *Storage
+}
+
+func NewRanger(storage *Storage) *Ranger {
+	return &Ranger{storage: storage}
+}
+
+func (r *Ranger) Range(callback func(key string, value string) bool) {
+	r.storage.mu.RLock()
+	defer r.storage.mu.RUnlock()
+	for key, value := range r.storage.data {
 		if !callback(key, value) {
 			break
 		}
