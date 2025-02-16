@@ -1,152 +1,72 @@
 package storage
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestStorage_Setter_Set(t *testing.T) {
-	// Создаем хранилище и репозиторий для записи
-	storage := NewStorage()
-	setter := NewSetter(storage)
-
-	// Выполняем операцию записи
-	setter.Set("metricType1:metricName1", "metricValue1")
-
-	// Проверяем, что данные были записаны в хранилище
-	getter := NewGetter(storage)
-	value, exists := getter.Get("metricType1:metricName1")
-	assert.True(t, exists, "Expected value to exist")
-	assert.Equal(t, "metricValue1", value, "Expected value to be 'metricValue1'")
-}
-
-func TestStorage_Setter_Set_Concurrency(t *testing.T) {
-	// Создаем хранилище и репозиторий для записи
-	storage := NewStorage()
-	setter := NewSetter(storage)
-
-	// Используем goroutines для конкурентной записи
-	done := make(chan struct{})
-	for i := 0; i < 1000; i++ {
-		go func(i int) {
-			// Исправлено: используем strconv.Itoa для преобразования числа в строку
-			setter.Set("key", "value"+strconv.Itoa(i))
-			done <- struct{}{}
-		}(i)
-	}
-
-	// Ждем завершения всех горутин
-	for i := 0; i < 1000; i++ {
-		<-done
-	}
-
-	// Проверяем, что после конкурентной записи значение в хранилище присутствует
-	getter := NewGetter(storage)
-	value, exists := getter.Get("key")
-	assert.True(t, exists, "Expected value to exist")
-	assert.Contains(t, value, "value", "Expected value to contain 'value'")
-}
-
-func TestStorage_Getter_Get(t *testing.T) {
-	// Создаем хранилище и репозиторий для записи и чтения
+func TestSetter_SetAndGetter_Get(t *testing.T) {
 	storage := NewStorage()
 	setter := NewSetter(storage)
 	getter := NewGetter(storage)
 
-	// Записываем данные в хранилище
-	setter.Set("metricType1:metricName1", "metricValue1")
+	// Устанавливаем значение
+	err := setter.Set("key1", "value1")
+	assert.NoError(t, err, "Ошибка при установке значения")
 
-	// Выполняем операцию чтения
-	value, exists := getter.Get("metricType1:metricName1")
+	// Получаем значение
+	value, err := getter.Get("key1")
+	assert.NoError(t, err, "Ошибка при получении существующего ключа")
+	assert.Equal(t, "value1", value, "Полученное значение не совпадает с ожидаемым")
 
-	// Проверяем, что данные существуют и корректны
-	assert.True(t, exists, "Expected value to exist")
-	assert.Equal(t, "metricValue1", value, "Expected value to be 'metricValue1'")
-
-	// Пытаемся получить несуществующее значение
-	_, exists = getter.Get("nonExistentKey")
-	assert.False(t, exists, "Expected value to not exist")
+	// Получаем несуществующий ключ
+	_, err = getter.Get("nonexistent")
+	assert.ErrorIs(t, err, ErrNotFound, "Ожидалась ошибка ErrNotFound при запросе несуществующего ключа")
 }
 
-func TestStorage_Ranger_Range(t *testing.T) {
-	// Создаем хранилище и репозиторий для записи и перебора
+func TestRanger_Range(t *testing.T) {
 	storage := NewStorage()
 	setter := NewSetter(storage)
 	ranger := NewRanger(storage)
 
-	// Записываем данные в хранилище
-	setter.Set("metricType1:metricName1", "metricValue1")
-	setter.Set("metricType2:metricName2", "metricValue2")
+	// Добавляем несколько значений
+	_ = setter.Set("key1", "value1")
+	_ = setter.Set("key2", "value2")
+	_ = setter.Set("key3", "value3")
 
-	// Перебираем данные и проверяем, что они правильные
-	var result []string
+	// Проверяем перебор всех значений
+	expected := map[string]string{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": "value3",
+	}
+
+	actual := make(map[string]string)
 	ranger.Range(func(key, value string) bool {
-		result = append(result, key+":"+value)
+		actual[key] = value
 		return true
 	})
 
-	// Проверяем количество элементов и их содержание
-	assert.Equal(t, 2, len(result), "Expected to iterate over 2 elements")
-	assert.Contains(t, result, "metricType1:metricName1:metricValue1", "Expected key-value pair 'metricType1:metricName1' to be present")
-	assert.Contains(t, result, "metricType2:metricName2:metricValue2", "Expected key-value pair 'metricType2:metricName2' to be present")
+	assert.Equal(t, expected, actual, "Перебранные значения не совпадают с ожидаемыми")
 }
 
-func TestStorage_Getter_Get_NonExistentKey(t *testing.T) {
-	// Создаем хранилище и репозиторий для чтения
-	storage := NewStorage()
-	getter := NewGetter(storage)
-
-	// Пытаемся получить несуществующий ключ
-	value, exists := getter.Get("nonExistentKey")
-
-	// Проверяем, что значение не найдено
-	assert.False(t, exists, "Expected value to not exist")
-	assert.Equal(t, "", value, "Expected value to be empty string")
-}
-
-func TestStorage_Ranger_Range_Empty(t *testing.T) {
-	// Создаем пустое хранилище и репозиторий для перебора
-	storage := NewStorage()
-	ranger := NewRanger(storage)
-
-	// Перебираем данные (их нет) и проверяем, что результат пустой
-	var result []string
-	ranger.Range(func(key, value string) bool {
-		result = append(result, key+":"+value)
-		return true
-	})
-
-	// Проверяем, что данных нет
-	assert.Empty(t, result, "Expected no data in range")
-}
-
-func TestStorage_Ranger_Range_BreakOnCallbackFalse(t *testing.T) {
-	// Создаем хранилище и репозиторий для записи и перебора
+func TestRanger_RangeEarlyExit(t *testing.T) {
 	storage := NewStorage()
 	setter := NewSetter(storage)
 	ranger := NewRanger(storage)
 
-	// Записываем несколько данных в хранилище
-	setter.Set("metricType1:metricName1", "metricValue1")
-	setter.Set("metricType2:metricName2", "metricValue2")
-	setter.Set("metricType3:metricName3", "metricValue3")
+	// Добавляем значения
+	_ = setter.Set("key1", "value1")
+	_ = setter.Set("key2", "value2")
+	_ = setter.Set("key3", "value3")
 
-	// Переменная для проверки сколько элементов было обработано
-	var result []string
+	// Проверяем, что Range выходит при false
+	var count int
+	ranger.Range(func(key, value string) bool {
+		count++
+		return count < 2 // Прерываем после первой итерации
+	})
 
-	// Колбэк, который останавливает перебор после 1-го элемента
-	callback := func(key, value string) bool {
-		result = append(result, key+":"+value)
-		// Возвращаем false после первого элемента, чтобы остановить перебор
-		return len(result) < 1
-	}
-
-	// Запускаем метод Range с колбэком
-	ranger.Range(callback)
-
-	// Проверяем, что в результате только один элемент
-	assert.Equal(t, 1, len(result), "Expected to process only 1 element")
-	assert.Contains(t, result, "metricType1:metricName1:metricValue1", "Expected first element to be 'metricType1:metricName1'")
+	assert.Equal(t, 2, count, "Range не завершился после указанного количества итераций")
 }

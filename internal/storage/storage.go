@@ -1,16 +1,21 @@
 package storage
 
 import (
+	"errors"
 	"sync"
 )
 
-// Storage является основным хранилищем данных с синхронизацией, поддерживающим обобщённые типы.
+var ErrNotFound error = errors.New("not found")
+
+const EmptyString string = ""
+
+// Storage является основным хранилищем данных с синхронизацией для строковых значений.
 type Storage struct {
 	data map[string]string
 	mu   sync.RWMutex
 }
 
-// NewStorage создаёт и возвращает новое хранилище для любого типа данных.
+// NewStorage создаёт и возвращает новое хранилище для строковых данных.
 func NewStorage() *Storage {
 	return &Storage{
 		data: make(map[string]string),
@@ -26,10 +31,11 @@ func NewSetter(storage *Storage) *Setter {
 	return &Setter{storage: storage}
 }
 
-func (s *Setter) Set(key string, value string) {
+func (s *Setter) Set(key string, value string) error {
 	s.storage.mu.Lock()
 	defer s.storage.mu.Unlock()
 	s.storage.data[key] = value
+	return nil
 }
 
 // Getter управляет операцией чтения из хранилища.
@@ -41,11 +47,14 @@ func NewGetter(storage *Storage) *Getter {
 	return &Getter{storage: storage}
 }
 
-func (g *Getter) Get(key string) (string, bool) {
+func (g *Getter) Get(key string) (string, error) {
 	g.storage.mu.RLock()
 	defer g.storage.mu.RUnlock()
 	value, exists := g.storage.data[key]
-	return value, exists
+	if !exists {
+		return EmptyString, ErrNotFound
+	}
+	return value, nil
 }
 
 // Ranger управляет операцией перебора элементов в хранилище.
