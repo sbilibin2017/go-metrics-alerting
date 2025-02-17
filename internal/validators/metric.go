@@ -1,55 +1,33 @@
 package validators
 
 import (
-	"errors"
 	"go-metrics-alerting/internal/types"
 )
 
-const (
-	// EmptyString - пустая строка для проверки.
-	EmptyString = ""
-)
+// IDValidatorImpl реализует интерфейс IDValidator для проверки ID.
+type IDValidator struct{}
 
-// Переменные для ошибок с использованием errors.New
-var (
-	ErrIDEmpty      = errors.New("id cannot be empty")
-	ErrMTypeEmpty   = errors.New("mtype cannot be empty")
-	ErrMTypeInvalid = errors.New("mtype must be either 'counter' or 'gauge'")
-	ErrDeltaEmpty   = errors.New("delta must be provided for Counter metrics")
-	ErrValueEmpty   = errors.New("value must be provided for Gauge metrics")
-)
-
-// validateID проверяет, что ID метрики не пустой.
-func ValidateID(id string) error {
-	if id == EmptyString {
-		return ErrIDEmpty
-	}
-	return nil
+func (v *IDValidator) Validate(id string) bool {
+	return id == types.EmptyString
 }
 
-// validateMType проверяет, что MType не пустой и имеет корректное значение.
-func ValidateMType(mType types.MType) error {
-	if string(mType) == EmptyString {
-		return ErrMTypeEmpty
-	}
-	if mType != types.Counter && mType != types.Gauge {
-		return ErrMTypeInvalid
-	}
-	return nil
+// MTypeValidatorImpl реализует интерфейс MTypeValidator для проверки типа метрики.
+type MTypeValidator struct{}
+
+func (v *MTypeValidator) Validate(mType string) bool {
+	return mType != string(types.Counter) && mType != string(types.Gauge)
 }
 
-// validateDelta проверяет, что Delta указана для типа Counter.
-func ValidateDelta(mtype types.MType, delta *int64) error {
-	if mtype == types.Counter && delta == nil {
-		return ErrDeltaEmpty
-	}
-	return nil
+// DeltaValidatorImpl реализует интерфейс DeltaValidator для проверки Delta.
+type DeltaValidator struct{}
+
+func (v *DeltaValidator) Validate(mtype string, delta *int64) bool {
+	return mtype == string(types.Counter) && delta == nil
 }
 
-// validateValue проверяет, что Value указана для типа Gauge.
-func ValidateValue(mtype types.MType, value *float64) error {
-	if mtype == types.Gauge && value == nil {
-		return ErrValueEmpty
-	}
-	return nil
+// ValueValidatorImpl реализует интерфейс ValueValidator для проверки Value.
+type ValueValidator struct{}
+
+func (v *ValueValidator) Validate(mtype string, value *float64) bool {
+	return mtype == string(types.Gauge) && value == nil
 }

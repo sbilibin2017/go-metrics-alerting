@@ -2,12 +2,9 @@ package storage
 
 import (
 	"errors"
+	"go-metrics-alerting/internal/types"
 	"sync"
 )
-
-var ErrNotFound error = errors.New("not found")
-
-const EmptyString string = ""
 
 // Storage является основным хранилищем данных с синхронизацией для строковых значений.
 type Storage struct {
@@ -23,15 +20,15 @@ func NewStorage() *Storage {
 }
 
 // Setter управляет операцией записи в хранилище.
-type Setter struct {
+type Saver struct {
 	storage *Storage
 }
 
-func NewSetter(storage *Storage) *Setter {
-	return &Setter{storage: storage}
+func NewSaver(storage *Storage) *Saver {
+	return &Saver{storage: storage}
 }
 
-func (s *Setter) Set(key string, value string) error {
+func (s *Saver) Save(key string, value string) error {
 	s.storage.mu.Lock()
 	defer s.storage.mu.Unlock()
 	s.storage.data[key] = value
@@ -47,12 +44,16 @@ func NewGetter(storage *Storage) *Getter {
 	return &Getter{storage: storage}
 }
 
+var (
+	ErrNotFound = errors.New("not found")
+)
+
 func (g *Getter) Get(key string) (string, error) {
 	g.storage.mu.RLock()
 	defer g.storage.mu.RUnlock()
 	value, exists := g.storage.data[key]
 	if !exists {
-		return EmptyString, ErrNotFound
+		return types.EmptyString, ErrNotFound
 	}
 	return value, nil
 }

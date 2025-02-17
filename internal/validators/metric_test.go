@@ -2,89 +2,87 @@ package validators
 
 import (
 	"go-metrics-alerting/internal/types"
+
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateID(t *testing.T) {
-	tests := []struct {
-		name    string
-		id      string
-		wantErr error
-	}{
-		{"Valid ID", "metric1", nil},
-		{"Empty ID", EmptyString, ErrIDEmpty},
-	}
+func TestIDValidator_Valid(t *testing.T) {
+	validator := &IDValidator{}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateID(tt.id)
-			assert.ErrorIs(t, err, tt.wantErr)
-		})
-	}
+	// Testing for the expected valid case (EmptyString)
+	result := validator.Validate("")
+	assert.True(t, result, "IDValidator should return true for EmptyString")
 }
 
-func TestValidateMType(t *testing.T) {
-	tests := []struct {
-		name    string
-		mType   types.MType
-		wantErr error
-	}{
-		{"Valid Counter", types.Counter, nil},
-		{"Valid Gauge", types.Gauge, nil},
-		{"Empty MType", "", ErrMTypeEmpty},
-		{"Invalid MType", "invalid", ErrMTypeInvalid},
-	}
+func TestIDValidator_Invalid(t *testing.T) {
+	validator := &IDValidator{}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateMType(tt.mType)
-			assert.ErrorIs(t, err, tt.wantErr)
-		})
-	}
+	// Testing for an invalid ID (non-empty string)
+	result := validator.Validate("non-empty-id")
+	assert.False(t, result, "IDValidator should return false for non-empty ID")
 }
 
-func TestValidateDelta(t *testing.T) {
-	var validDelta int64 = 100
+func TestMTypeValidator_Valid(t *testing.T) {
+	validator := &MTypeValidator{}
 
-	tests := []struct {
-		name    string
-		mType   types.MType
-		delta   *int64
-		wantErr error
-	}{
-		{"Valid Counter with Delta", types.Counter, &validDelta, nil},
-		{"Counter without Delta", types.Counter, nil, ErrDeltaEmpty},
-		{"Gauge without Delta", types.Gauge, nil, nil}, // Delta не требуется для Gauge
-	}
+	// Testing for an invalid metric type (Counter and Gauge are valid, so should return false)
+	resultCounter := validator.Validate(string(types.Counter))
+	assert.False(t, resultCounter, "MTypeValidator should return false for Counter")
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateDelta(tt.mType, tt.delta)
-			assert.ErrorIs(t, err, tt.wantErr)
-		})
-	}
+	resultGauge := validator.Validate(string(types.Gauge))
+	assert.False(t, resultGauge, "MTypeValidator should return false for Gauge")
 }
 
-func TestValidateValue(t *testing.T) {
-	var validValue float64 = 99.99
+func TestMTypeValidator_Invalid(t *testing.T) {
+	validator := &MTypeValidator{}
 
-	tests := []struct {
-		name    string
-		mType   types.MType
-		value   *float64
-		wantErr error
-	}{
-		{"Valid Gauge with Value", types.Gauge, &validValue, nil},
-		{"Gauge without Value", types.Gauge, nil, ErrValueEmpty},
-		{"Counter without Value", types.Counter, nil, nil}, // Value не требуется для Counter
-	}
+	// Testing for an invalid metric type (should return true for invalid types)
+	resultInvalid := validator.Validate("invalid_type")
+	assert.True(t, resultInvalid, "MTypeValidator should return true for an invalid type")
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateValue(tt.mType, tt.value)
-			assert.ErrorIs(t, err, tt.wantErr)
-		})
-	}
+func TestDeltaValidator_Valid(t *testing.T) {
+	validator := &DeltaValidator{}
+
+	// Testing for the expected valid case (Counter metric with delta == nil)
+	var delta *int64
+	result := validator.Validate(string(types.Counter), delta)
+	assert.True(t, result, "DeltaValidator should return true for Counter metric with nil delta")
+}
+
+func TestDeltaValidator_Invalid(t *testing.T) {
+	validator := &DeltaValidator{}
+
+	// Testing for invalid Counter metric with a non-nil delta
+	delta := int64(5)
+	result := validator.Validate(string(types.Counter), &delta)
+	assert.False(t, result, "DeltaValidator should return false for non-nil delta for Counter metric")
+
+	// Testing for non-Counter metric (should return false)
+	resultNonCounter := validator.Validate("gauge", &delta)
+	assert.False(t, resultNonCounter, "DeltaValidator should return false for non-Counter metric")
+}
+
+func TestValueValidator_Valid(t *testing.T) {
+	validator := &ValueValidator{}
+
+	// Testing for the expected valid case (Gauge metric with value == nil)
+	var value *float64
+	result := validator.Validate(string(types.Gauge), value)
+	assert.True(t, result, "ValueValidator should return true for Gauge metric with nil value")
+}
+
+func TestValueValidator_Invalid(t *testing.T) {
+	validator := &ValueValidator{}
+
+	// Testing for invalid Gauge metric with a non-nil value
+	value := float64(3.14)
+	result := validator.Validate(string(types.Gauge), &value)
+	assert.False(t, result, "ValueValidator should return false for non-nil value for Gauge metric")
+
+	// Testing for non-Gauge metric (should return false)
+	resultNonGauge := validator.Validate("counter", &value)
+	assert.False(t, resultNonGauge, "ValueValidator should return false for non-Gauge metric")
 }

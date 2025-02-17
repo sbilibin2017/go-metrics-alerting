@@ -11,7 +11,7 @@ const (
 // MetricsRequest используется для обновления метрики.
 type MetricsRequest struct {
 	ID    string   `json:"id"`
-	MType MType    `json:"mtype"`
+	MType string   `json:"mtype"`
 	Delta *int64   `json:"delta,omitempty"`
 	Value *float64 `json:"value,omitempty"`
 }
@@ -23,7 +23,7 @@ type MetricsResponse struct {
 // MetricValueRequest используется для запроса значения метрики.
 type MetricValueRequest struct {
 	ID    string `json:"id"`
-	MType MType  `json:"mtype"`
+	MType string `json:"mtype"`
 }
 
 // MetricValueRequest используется для запроса значения метрики.

@@ -8,11 +8,11 @@ import (
 
 func TestSetter_SetAndGetter_Get(t *testing.T) {
 	storage := NewStorage()
-	setter := NewSetter(storage)
+	setter := NewSaver(storage)
 	getter := NewGetter(storage)
 
 	// Устанавливаем значение
-	err := setter.Set("key1", "value1")
+	err := setter.Save("key1", "value1")
 	assert.NoError(t, err, "Ошибка при установке значения")
 
 	// Получаем значение
@@ -27,13 +27,13 @@ func TestSetter_SetAndGetter_Get(t *testing.T) {
 
 func TestRanger_Range(t *testing.T) {
 	storage := NewStorage()
-	setter := NewSetter(storage)
+	setter := NewSaver(storage)
 	ranger := NewRanger(storage)
 
 	// Добавляем несколько значений
-	_ = setter.Set("key1", "value1")
-	_ = setter.Set("key2", "value2")
-	_ = setter.Set("key3", "value3")
+	_ = setter.Save("key1", "value1")
+	_ = setter.Save("key2", "value2")
+	_ = setter.Save("key3", "value3")
 
 	// Проверяем перебор всех значений
 	expected := map[string]string{
@@ -53,13 +53,13 @@ func TestRanger_Range(t *testing.T) {
 
 func TestRanger_RangeEarlyExit(t *testing.T) {
 	storage := NewStorage()
-	setter := NewSetter(storage)
+	setter := NewSaver(storage)
 	ranger := NewRanger(storage)
 
 	// Добавляем значения
-	_ = setter.Set("key1", "value1")
-	_ = setter.Set("key2", "value2")
-	_ = setter.Set("key3", "value3")
+	_ = setter.Save("key1", "value1")
+	_ = setter.Save("key2", "value2")
+	_ = setter.Save("key3", "value3")
 
 	// Проверяем, что Range выходит при false
 	var count int

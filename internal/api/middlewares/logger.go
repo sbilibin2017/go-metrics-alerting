@@ -1,9 +1,8 @@
 package middlewares
 
 import (
+	"go-metrics-alerting/pkg/logger"
 	"time"
-
-	"go-metrics-alerting/internal/logger"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
