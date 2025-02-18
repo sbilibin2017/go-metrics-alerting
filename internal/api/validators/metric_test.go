@@ -26,16 +26,16 @@ func TestValidateID(t *testing.T) {
 
 func TestValidateMType(t *testing.T) {
 	tests := []struct {
-		mType       string
+		mType       types.MType
 		expectedErr error
 	}{
-		{string(types.Counter), nil},      // Тип Counter должен быть валидным
-		{string(types.Gauge), nil},        // Тип Gauge должен быть валидным
+		{types.Counter, nil},              // Тип Counter должен быть валидным
+		{types.Gauge, nil},                // Тип Gauge должен быть валидным
 		{"invalid-type", ErrInvalidMType}, // Неверный тип метрики должен привести к ошибке
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.mType, func(t *testing.T) {
+		t.Run(string(tt.mType), func(t *testing.T) {
 			err := ValidateMType(tt.mType)
 			assert.Equal(t, tt.expectedErr, err)
 		})
@@ -44,17 +44,17 @@ func TestValidateMType(t *testing.T) {
 
 func TestValidateDelta(t *testing.T) {
 	tests := []struct {
-		mType       string
+		mType       types.MType
 		delta       *int64
 		expectedErr error
 	}{
-		{string(types.Counter), nil, ErrInvalidDelta}, // Для Counter, если Delta = nil, ошибка
-		{string(types.Counter), new(int64), nil},      // Для Counter, если Delta задано, ошибок нет
-		{string(types.Gauge), nil, nil},               // Для Gauge нет необходимости в Delta, ошибок нет
+		{types.Counter, nil, ErrInvalidDelta}, // Для Counter, если Delta = nil, ошибка
+		{types.Counter, new(int64), nil},      // Для Counter, если Delta задано, ошибок нет
+		{types.Gauge, nil, nil},               // Для Gauge нет необходимости в Delta, ошибок нет
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.mType, func(t *testing.T) {
+		t.Run(string(tt.mType), func(t *testing.T) {
 			err := ValidateDelta(tt.mType, tt.delta)
 			assert.Equal(t, tt.expectedErr, err)
 		})
@@ -63,17 +63,17 @@ func TestValidateDelta(t *testing.T) {
 
 func TestValidateValue(t *testing.T) {
 	tests := []struct {
-		mType       string
+		mType       types.MType
 		value       *float64
 		expectedErr error
 	}{
-		{string(types.Gauge), nil, ErrInvalidValue}, // Для Gauge, если Value = nil, ошибка
-		{string(types.Gauge), new(float64), nil},    // Для Gauge, если Value задано, ошибок нет
-		{string(types.Counter), nil, nil},           // Для Counter нет необходимости в Value, ошибок нет
+		{types.Gauge, nil, ErrInvalidValue}, // Для Gauge, если Value = nil, ошибка
+		{types.Gauge, new(float64), nil},    // Для Gauge, если Value задано, ошибок нет
+		{types.Counter, nil, nil},           // Для Counter нет необходимости в Value, ошибок нет
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.mType, func(t *testing.T) {
+		t.Run(string(tt.mType), func(t *testing.T) {
 			err := ValidateValue(tt.mType, tt.value)
 			assert.Equal(t, tt.expectedErr, err)
 		})
