@@ -16,7 +16,7 @@ import (
 )
 
 // NewServer создает новый сервер с роутером и middleware
-func RunServer() *gin.Engine {
+func RunServer() {
 	// Загрузка переменных окружения из .env файла
 	if err := godotenv.Load(); err != nil {
 		logger.Logger.Warn("Error loading .env file")
@@ -52,34 +52,24 @@ func RunServer() *gin.Engine {
 	r.Use(middlewares.LoggerMiddleware(logger.Logger))
 
 	// Инициализация хранилищ для гейджов и счётчиков
-	gaugeStorage := storage.NewStorage[string, float64]()
-	counterStorage := storage.NewStorage[string, int64]()
+	s := storage.NewStorage()
 
 	// Инициализация репозиториев
-	gaugeSaver := storage.NewSaver(gaugeStorage)
-	gaugeGetter := storage.NewGetter(gaugeStorage)
-	gaugeRanger := storage.NewRanger(gaugeStorage)
-
-	counterSaver := storage.NewSaver(counterStorage)
-	counterGetter := storage.NewGetter(counterStorage)
-	counterRanger := storage.NewRanger(counterStorage)
+	saver := storage.NewSaver(s)
+	getter := storage.NewGetter(s)
+	ranger := storage.NewRanger(s)
 
 	// Инициализация сервисов
 	updateMetricsService := services.NewUpdateMetricsService(
-		gaugeSaver,
-		gaugeGetter,
-		counterSaver,
-		counterGetter,
+		saver, getter,
 	)
 
 	getMetricValueService := services.NewGetMetricValueService(
-		gaugeGetter,
-		counterGetter,
+		getter,
 	)
 
 	getAllMetricValuesService := services.NewGetAllMetricValuesService(
-		gaugeRanger,
-		counterRanger,
+		ranger,
 	)
 
 	// Регистрация маршрутов для получения метрик
@@ -92,6 +82,4 @@ func RunServer() *gin.Engine {
 
 	// Запуск сервера на нужном адресе
 	r.Run(config.Address)
-
-	return nil
 }

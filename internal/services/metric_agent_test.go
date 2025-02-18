@@ -209,3 +209,8 @@ func TestStartMetricsCollection(t *testing.T) {
 		t.Log("Test passed: collection stopped")
 	}
 }
+
+// float64Ptr - утилитная функция для создания указателя на float64
+func float64Ptr(f float64) *float64 {
+	return &f
+}

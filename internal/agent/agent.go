@@ -6,7 +6,7 @@ import (
 	"go-metrics-alerting/internal/configs"
 	"go-metrics-alerting/internal/services"
 	"log"
-	"time" // Импортируем пакет для работы с time.Duration
+	"time"
 
 	"github.com/caarlos0/env"
 	"github.com/go-resty/resty/v2"

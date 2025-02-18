@@ -4,29 +4,29 @@ import (
 	"sync"
 )
 
-// Storage является основным хранилищем данных с синхронизацией для любых типов значений.
-type Storage[K comparable, V any] struct {
-	data map[K]V
+// Storage является основным хранилищем данных с синхронизацией.
+type Storage struct {
+	data map[string]string
 	mu   sync.RWMutex
 }
 
 // NewStorage создаёт и возвращает новое хранилище для данных.
-func NewStorage[K comparable, V any]() *Storage[K, V] {
-	return &Storage[K, V]{
-		data: make(map[K]V),
+func NewStorage() *Storage {
+	return &Storage{
+		data: make(map[string]string),
 	}
 }
 
 // Saver управляет операцией записи в хранилище.
-type Saver[K comparable, V any] struct {
-	storage *Storage[K, V]
+type Saver struct {
+	storage *Storage
 }
 
-func NewSaver[K comparable, V any](storage *Storage[K, V]) *Saver[K, V] {
-	return &Saver[K, V]{storage: storage}
+func NewSaver(storage *Storage) *Saver {
+	return &Saver{storage: storage}
 }
 
-func (s *Saver[K, V]) Save(key K, value V) bool {
+func (s *Saver) Save(key, value string) bool {
 	s.storage.mu.Lock()
 	defer s.storage.mu.Unlock()
 	s.storage.data[key] = value
@@ -34,35 +34,31 @@ func (s *Saver[K, V]) Save(key K, value V) bool {
 }
 
 // Getter управляет операцией чтения из хранилища.
-type Getter[K comparable, V any] struct {
-	storage *Storage[K, V]
+type Getter struct {
+	storage *Storage
 }
 
-func NewGetter[K comparable, V any](storage *Storage[K, V]) *Getter[K, V] {
-	return &Getter[K, V]{storage: storage}
+func NewGetter(storage *Storage) *Getter {
+	return &Getter{storage: storage}
 }
 
-func (g *Getter[K, V]) Get(key K) (V, bool) {
+func (g *Getter) Get(key string) (string, bool) {
 	g.storage.mu.RLock()
 	defer g.storage.mu.RUnlock()
 	value, exists := g.storage.data[key]
-	var zeroValue V
-	if !exists {
-		return zeroValue, false
-	}
-	return value, true
+	return value, exists
 }
 
 // Ranger управляет операцией перебора элементов в хранилище.
-type Ranger[K comparable, V any] struct {
-	storage *Storage[K, V]
+type Ranger struct {
+	storage *Storage
 }
 
-func NewRanger[K comparable, V any](storage *Storage[K, V]) *Ranger[K, V] {
-	return &Ranger[K, V]{storage: storage}
+func NewRanger(storage *Storage) *Ranger {
+	return &Ranger{storage: storage}
 }
 
-func (r *Ranger[K, V]) Range(callback func(key K, value V) bool) {
+func (r *Ranger) Range(callback func(key, value string) bool) {
 	r.storage.mu.RLock()
 	defer r.storage.mu.RUnlock()
 	for key, value := range r.storage.data {
