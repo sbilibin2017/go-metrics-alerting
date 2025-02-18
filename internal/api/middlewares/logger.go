@@ -1,31 +1,29 @@
 package middlewares
 
 import (
-	"go-metrics-alerting/pkg/logger"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
-// LoggerMiddleware logs requests and responses using the global logger.
-func LoggerMiddleware() gin.HandlerFunc {
+// Logger - интерфейс для логгера
+type Logger interface {
+	Info(msg string, fields ...zap.Field)
+}
+
+func LoggerMiddleware(logger Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Record the start time
 		start := time.Now()
 
-		// Capture the URI and method
 		uri := c.FullPath()
 		method := c.Request.Method
 
-		// Process the request
 		c.Next()
 
-		// Calculate the request duration
 		duration := time.Since(start)
 
-		// Log the request details using the global logger
-		logger.Log.Info("Request processed",
+		logger.Info("Request processed",
 			zap.String("method", method),
 			zap.String("uri", uri),
 			zap.Duration("duration", duration),

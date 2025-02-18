@@ -1,48 +1,63 @@
 package middlewares
 
 import (
+	"testing"
+	"time"
+
 	"net/http"
 	"net/http/httptest"
-	"testing"
 
 	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
-
-	"github.com/stretchr/testify/assert"
 )
 
-func TestLoggerMiddleware_RealServer(t *testing.T) {
-	// Инициализируем реальный zap логгер
-	logger, _ := zap.NewDevelopment()
-	defer logger.Sync() // Ensure that any buffered log entries are flushed
+// MockLogger - Мок для интерфейса Logger
+type MockLogger struct {
+	mock.Mock
+}
 
-	// Создаем новый Gin рутер
-	r := gin.New()
+func (m *MockLogger) Info(msg string, fields ...zap.Field) {
+	m.Called(msg, fields)
+}
 
-	// Добавляем middleware
-	r.Use(LoggerMiddleware())
+// TestLoggerMiddleware_CheckDuration проверяет, что метод Info логирует продолжительность запроса
+func TestLoggerMiddleware_CheckDuration(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.Default()
 
-	// Добавляем маршрут
+	// Создаем мок логгера
+	mockLogger := new(MockLogger)
+
+	// Устанавливаем ожидания для вызова метода Info
+	mockLogger.On("Info", "Request processed", mock.MatchedBy(func(fields []zap.Field) bool {
+		for _, field := range fields {
+			if field.Key == "duration" {
+				// Проверяем, что продолжительность больше нуля
+				if field.Integer > 0 {
+					return true
+				}
+			}
+		}
+		return false
+	})).Return(nil)
+
+	// Регистрируем middleware
+	r.Use(LoggerMiddleware(mockLogger))
+
+	// Регистрируем маршрут
 	r.GET("/test", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+		time.Sleep(100 * time.Millisecond)
+		c.String(http.StatusOK, "OK")
 	})
 
-	// Создаем новый HTTP запрос
-	req, err := http.NewRequest("GET", "/test", nil)
-	assert.NoError(t, err)
+	// Создаем запрос
+	req, _ := http.NewRequest(http.MethodGet, "/test", nil)
+	recorder := httptest.NewRecorder()
 
-	// Результат выполнения запроса
-	w := httptest.NewRecorder()
+	// Обрабатываем запрос
+	r.ServeHTTP(recorder, req)
 
-	// Отправляем запрос
-	r.ServeHTTP(w, req)
-
-	// Проверяем код ответа
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	// Проверяем тело ответа
-	assert.Contains(t, w.Body.String(), `"message":"ok"`)
-
-	// Проверяем логи (это будет вывод в консоль, но можно настроить и проверку через файлы или другие способы)
-	// В реальных тестах можно использовать стереотипы или перехватчики для проверки консольных выводов.
+	// Проверяем, что метод Info был вызван с duration
+	mockLogger.AssertExpectations(t)
 }
