@@ -1,73 +1,68 @@
 package storage
 
 import (
-	"errors"
-	"go-metrics-alerting/internal/types"
 	"sync"
 )
 
-// Storage является основным хранилищем данных с синхронизацией для строковых значений.
-type Storage struct {
-	data map[string]string
+// Storage является основным хранилищем данных с синхронизацией для любых типов значений.
+type Storage[K comparable, V any] struct {
+	data map[K]V
 	mu   sync.RWMutex
 }
 
-// NewStorage создаёт и возвращает новое хранилище для строковых данных.
-func NewStorage() *Storage {
-	return &Storage{
-		data: make(map[string]string),
+// NewStorage создаёт и возвращает новое хранилище для данных.
+func NewStorage[K comparable, V any]() *Storage[K, V] {
+	return &Storage[K, V]{
+		data: make(map[K]V),
 	}
 }
 
-// Setter управляет операцией записи в хранилище.
-type Saver struct {
-	storage *Storage
+// Saver управляет операцией записи в хранилище.
+type Saver[K comparable, V any] struct {
+	storage *Storage[K, V]
 }
 
-func NewSaver(storage *Storage) *Saver {
-	return &Saver{storage: storage}
+func NewSaver[K comparable, V any](storage *Storage[K, V]) *Saver[K, V] {
+	return &Saver[K, V]{storage: storage}
 }
 
-func (s *Saver) Save(key string, value string) error {
+func (s *Saver[K, V]) Save(key K, value V) bool {
 	s.storage.mu.Lock()
 	defer s.storage.mu.Unlock()
 	s.storage.data[key] = value
-	return nil
+	return true
 }
 
 // Getter управляет операцией чтения из хранилища.
-type Getter struct {
-	storage *Storage
+type Getter[K comparable, V any] struct {
+	storage *Storage[K, V]
 }
 
-func NewGetter(storage *Storage) *Getter {
-	return &Getter{storage: storage}
+func NewGetter[K comparable, V any](storage *Storage[K, V]) *Getter[K, V] {
+	return &Getter[K, V]{storage: storage}
 }
 
-var (
-	ErrNotFound = errors.New("not found")
-)
-
-func (g *Getter) Get(key string) (string, error) {
+func (g *Getter[K, V]) Get(key K) (V, bool) {
 	g.storage.mu.RLock()
 	defer g.storage.mu.RUnlock()
 	value, exists := g.storage.data[key]
+	var zeroValue V
 	if !exists {
-		return types.EmptyString, ErrNotFound
+		return zeroValue, false
 	}
-	return value, nil
+	return value, true
 }
 
 // Ranger управляет операцией перебора элементов в хранилище.
-type Ranger struct {
-	storage *Storage
+type Ranger[K comparable, V any] struct {
+	storage *Storage[K, V]
 }
 
-func NewRanger(storage *Storage) *Ranger {
-	return &Ranger{storage: storage}
+func NewRanger[K comparable, V any](storage *Storage[K, V]) *Ranger[K, V] {
+	return &Ranger[K, V]{storage: storage}
 }
 
-func (r *Ranger) Range(callback func(key string, value string) bool) {
+func (r *Ranger[K, V]) Range(callback func(key K, value V) bool) {
 	r.storage.mu.RLock()
 	defer r.storage.mu.RUnlock()
 	for key, value := range r.storage.data {

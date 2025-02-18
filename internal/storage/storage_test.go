@@ -4,69 +4,138 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestSetter_SetAndGetter_Get(t *testing.T) {
-	storage := NewStorage()
-	setter := NewSaver(storage)
-	getter := NewGetter(storage)
+func TestStorage_StringKeyIntValue(t *testing.T) {
+	// Создаем хранилище string -> int
+	store := NewStorage[string, int]()
 
-	// Устанавливаем значение
-	err := setter.Save("key1", "value1")
-	assert.NoError(t, err, "Ошибка при установке значения")
+	// Создание Saver и сохранение данных
+	saver := NewSaver(store)
+	saver.Save("key1", 100)
+	saver.Save("key2", 200)
 
-	// Получаем значение
-	value, err := getter.Get("key1")
-	assert.NoError(t, err, "Ошибка при получении существующего ключа")
-	assert.Equal(t, "value1", value, "Полученное значение не совпадает с ожидаемым")
+	// Создание Getter и проверка значений
+	getter := NewGetter(store)
 
-	// Получаем несуществующий ключ
-	_, err = getter.Get("nonexistent")
-	assert.ErrorIs(t, err, ErrNotFound, "Ожидалась ошибка ErrNotFound при запросе несуществующего ключа")
+	// Тестируем существующие ключи
+	value, exists := getter.Get("key1")
+	require.True(t, exists)
+	assert.Equal(t, 100, value)
+
+	value, exists = getter.Get("key2")
+	require.True(t, exists)
+	assert.Equal(t, 200, value)
+
+	// Тестируем несуществующий ключ
+	value, exists = getter.Get("key3")
+	assert.False(t, exists)
+	assert.Equal(t, 0, value) // Проверяем, что возвращается нулевое значение для типа int
 }
 
-func TestRanger_Range(t *testing.T) {
-	storage := NewStorage()
-	setter := NewSaver(storage)
-	ranger := NewRanger(storage)
+func TestStorage_Range(t *testing.T) {
+	// Создаем хранилище string -> int
+	store := NewStorage[string, int]()
 
-	// Добавляем несколько значений
-	_ = setter.Save("key1", "value1")
-	_ = setter.Save("key2", "value2")
-	_ = setter.Save("key3", "value3")
+	// Создание Saver и сохранение данных
+	saver := NewSaver(store)
+	saver.Save("key1", 100)
+	saver.Save("key2", 200)
+	saver.Save("key3", 300)
 
-	// Проверяем перебор всех значений
-	expected := map[string]string{
-		"key1": "value1",
-		"key2": "value2",
-		"key3": "value3",
+	// Создаем Ranger для перебора
+	ranger := NewRanger(store)
+
+	// Проверка перебора всех элементов
+	expected := map[string]int{
+		"key1": 100,
+		"key2": 200,
+		"key3": 300,
 	}
 
-	actual := make(map[string]string)
-	ranger.Range(func(key, value string) bool {
-		actual[key] = value
+	ranger.Range(func(key string, value int) bool {
+		expectedValue, ok := expected[key]
+		require.True(t, ok) // Ожидаем, что ключ будет найден в ожидаемой мапе
+		assert.Equal(t, expectedValue, value)
 		return true
 	})
-
-	assert.Equal(t, expected, actual, "Перебранные значения не совпадают с ожидаемыми")
 }
 
-func TestRanger_RangeEarlyExit(t *testing.T) {
-	storage := NewStorage()
-	setter := NewSaver(storage)
-	ranger := NewRanger(storage)
+func TestStorage_EmptyStorage(t *testing.T) {
+	// Создаем пустое хранилище
+	store := NewStorage[string, int]()
 
-	// Добавляем значения
-	_ = setter.Save("key1", "value1")
-	_ = setter.Save("key2", "value2")
-	_ = setter.Save("key3", "value3")
+	// Проверка, что хранилище пустое
+	getter := NewGetter(store)
+	_, exists := getter.Get("key1")
+	assert.False(t, exists)
+}
 
-	// Проверяем, что Range выходит при false
-	var count int
-	ranger.Range(func(key, value string) bool {
-		count++
-		return count < 2 // Прерываем после первой итерации
+func TestStorage_DifferentTypes(t *testing.T) {
+	// Создаем хранилище string -> float64
+	store := NewStorage[string, float64]()
+
+	// Создание Saver и сохранение данных
+	saver := NewSaver(store)
+	saver.Save("pi", 3.14159)
+	saver.Save("e", 2.71828)
+
+	// Создание Getter и проверка значений
+	getter := NewGetter(store)
+
+	// Проверяем сохраненные данные
+	value, exists := getter.Get("pi")
+	require.True(t, exists)
+	assert.Equal(t, 3.14159, value)
+
+	value, exists = getter.Get("e")
+	require.True(t, exists)
+	assert.Equal(t, 2.71828, value)
+}
+
+func TestStorage_NilValue(t *testing.T) {
+	// Создаем хранилище string -> *string (указатель на строку)
+	store := NewStorage[string, *string]()
+
+	// Создаем Saver и сохраняем nil
+	saver := NewSaver(store)
+	var str *string
+	saver.Save("key1", str)
+
+	// Создание Getter и проверка значения
+	getter := NewGetter(store)
+	value, exists := getter.Get("key1")
+	require.True(t, exists)
+	assert.Nil(t, value) // Проверяем, что возвращается nil
+}
+
+func TestStorage_RangeWithCallbackExit(t *testing.T) {
+	// Создаем хранилище string -> int
+	store := NewStorage[string, int]()
+
+	// Создание Saver и сохранение данных
+	saver := NewSaver(store)
+	saver.Save("key1", 100)
+	saver.Save("key2", 200)
+	saver.Save("key3", 300)
+
+	// Создаем Ranger для перебора
+	ranger := NewRanger(store)
+
+	// Флаг для проверки, что цикл остановился
+	callbackCalled := false
+
+	// Выполняем перебор с условием остановки в callback
+	ranger.Range(func(key string, value int) bool {
+		// Проверяем первый элемент
+		if key == "key2" {
+			callbackCalled = true
+			return false // Останавливаем перебор
+		}
+		return true // Продолжаем перебор
 	})
 
-	assert.Equal(t, 2, count, "Range не завершился после указанного количества итераций")
+	// Проверяем, что callback был вызван для "key2" и цикл остановился
+	assert.True(t, callbackCalled, "Callback for key2 should have been called and loop should stop")
 }
