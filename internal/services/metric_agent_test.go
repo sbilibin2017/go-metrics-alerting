@@ -209,35 +209,3 @@ func TestStartMetricsCollection(t *testing.T) {
 		t.Log("Test passed: collection stopped")
 	}
 }
-
-func TestStartMetricAgent_StopSignal(t *testing.T) {
-	// Создаем тестовый HTTP-сервер
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer testServer.Close()
-
-	// Конфигурируем сервер
-	config := &configs.AgentConfig{Address: testServer.URL, PollInterval: 1, ReportInterval: 2}
-	client := resty.New()
-
-	// Запуск коллекции метрик в горутине
-	go StartMetricAgent(config, client)
-
-	// Ожидаем некоторое время, чтобы процесс начал собирать и отправлять метрики
-	time.Sleep(4 * time.Second)
-
-	// Прерываем выполнение с помощью сигнала ОС
-	t.Log("Sending stop signal to simulate OS signal (SIGINT, SIGTERM)")
-
-	// Мы не можем отправить сигнал напрямую в тесте, но можем ожидать, что функция завершится
-	// после того, как пройдет время, достаточное для выполнения остановки по сигналу
-
-	// Проверяем, что процесс остановился после получения сигнала
-	select {
-	case <-time.After(10 * time.Second): // Ждем достаточно времени для завершения работы
-		t.Fatal("Test failed: Metric collection did not stop after receiving stop signal")
-	default:
-		t.Log("Test passed: collection stopped after signal")
-	}
-}

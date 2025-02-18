@@ -4,10 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
-	"os"
-	"os/signal"
 	"runtime"
-	"syscall"
 	"time"
 
 	"go-metrics-alerting/internal/configs"
@@ -22,25 +19,24 @@ import (
 func StartMetricAgent(config *configs.AgentConfig, client *resty.Client) {
 	metricsCh := make(chan types.UpdateMetricsRequest, 100)
 
-	tickerPoll := time.NewTicker(config.PollInterval * time.Second)
-	tickerReport := time.NewTicker(config.ReportInterval * time.Second)
+	tickerPoll := time.NewTicker(time.Duration(config.PollInterval) * time.Second)
+	tickerReport := time.NewTicker(time.Duration(config.ReportInterval) * time.Second)
 	defer tickerPoll.Stop()
 	defer tickerReport.Stop()
 
-	// Создание канала для получения сигналов от ОС (например, SIGINT или SIGTERM)
-	signalCh := make(chan os.Signal, 1)
-	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
-
+	// Логирование старта
 	logger.Logger.Info("Metric collection started",
 		zap.Int("poll_interval", int(config.PollInterval)),
 		zap.Int("report_interval", int(config.ReportInterval)))
 
-	// Бесконечный цикл, который можно прервать через сигнал stopCh
+	// Бесконечный цикл для сбора и отправки метрик
 	for {
 		select {
 		case <-tickerPoll.C:
+			// Сбор метрик
 			collectMetrics(metricsCh)
 		case <-tickerReport.C:
+			// Отправка метрик
 			sendMetrics(metricsCh, client, config.Address)
 		}
 	}
