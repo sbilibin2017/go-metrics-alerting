@@ -1,8 +1,8 @@
-package services_test
+package services
 
 import (
-	"go-metrics-alerting/internal/api/types"
-	"go-metrics-alerting/internal/services"
+	"go-metrics-alerting/internal/types"
+
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -52,7 +52,7 @@ func TestUpdateMetricsService_Update_Gauge(t *testing.T) {
 	mockCounterGetter := new(MockCounterGetter)
 
 	// Create the service
-	service := services.NewUpdateMetricsService(mockGaugeSaver, mockGaugeGetter, mockCounterSaver, mockCounterGetter)
+	service := NewUpdateMetricsService(mockGaugeSaver, mockGaugeGetter, mockCounterSaver, mockCounterGetter)
 
 	req := &types.UpdateMetricsRequest{
 		ID:    "metric1",
@@ -81,7 +81,7 @@ func TestUpdateMetricsService_Update_Counter_ExistingValue(t *testing.T) {
 	mockCounterGetter := new(MockCounterGetter)
 
 	// Create the service
-	service := services.NewUpdateMetricsService(mockGaugeSaver, mockGaugeGetter, mockCounterSaver, mockCounterGetter)
+	service := NewUpdateMetricsService(mockGaugeSaver, mockGaugeGetter, mockCounterSaver, mockCounterGetter)
 
 	req := &types.UpdateMetricsRequest{
 		ID:    "metric1",
@@ -112,7 +112,7 @@ func TestUpdateMetricsService_Update_Counter_NoExistingValue(t *testing.T) {
 	mockCounterGetter := new(MockCounterGetter)
 
 	// Create the service
-	service := services.NewUpdateMetricsService(mockGaugeSaver, mockGaugeGetter, mockCounterSaver, mockCounterGetter)
+	service := NewUpdateMetricsService(mockGaugeSaver, mockGaugeGetter, mockCounterSaver, mockCounterGetter)
 
 	req := &types.UpdateMetricsRequest{
 		ID:    "metric1",
@@ -143,7 +143,7 @@ func TestUpdateMetricsService_Update_UnsupportedType(t *testing.T) {
 	mockCounterGetter := new(MockCounterGetter)
 
 	// Create the service
-	service := services.NewUpdateMetricsService(mockGaugeSaver, mockGaugeGetter, mockCounterSaver, mockCounterGetter)
+	service := NewUpdateMetricsService(mockGaugeSaver, mockGaugeGetter, mockCounterSaver, mockCounterGetter)
 
 	req := &types.UpdateMetricsRequest{
 		ID:    "metric1",
