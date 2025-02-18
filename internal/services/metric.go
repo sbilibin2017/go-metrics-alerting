@@ -3,6 +3,7 @@ package services
 import (
 	"go-metrics-alerting/internal/logger"
 	"go-metrics-alerting/internal/types"
+	"strconv"
 
 	"go.uber.org/zap"
 )
@@ -15,6 +16,11 @@ type Saver[K comparable, V any] interface {
 // Getter управляет операцией чтения из хранилища.
 type Getter[K comparable, V any] interface {
 	Get(key K) (V, bool)
+}
+
+// Getter управляет операцией чтения из хранилища.
+type Ranger[K comparable, V any] interface {
+	Range(callback func(key K, value V) bool)
 }
 
 type UpdateMetricsService struct {
@@ -86,4 +92,102 @@ func (s *UpdateMetricsService) Update(req *types.UpdateMetricsRequest) (*types.U
 
 		return nil, nil
 	}
+}
+
+// GetMetricValueServiceImpl структура для реализации сервиса получения значения метрики.
+type GetMetricValueService struct {
+	gaugeGetter   Getter[string, float64]
+	counterGetter Getter[string, int64]
+}
+
+// NewGetMetricValueService создаёт новый экземпляр сервиса получения метрик.
+func NewGetMetricValueService(
+	gaugeGetter Getter[string, float64],
+	counterGetter Getter[string, int64],
+) *GetMetricValueService {
+	logger.Logger.Info("GetMetricValueService initialized")
+	return &GetMetricValueService{
+		gaugeGetter:   gaugeGetter,
+		counterGetter: counterGetter,
+	}
+}
+
+// GetMetricValue получает значение метрики по её ID и возвращает результат с нужным типом.
+func (s *GetMetricValueService) GetMetricValue(req *types.GetMetricValueRequest) (*types.GetMetricValueResponse, error) {
+	logger.Logger.Debug("Received request to get metric value",
+		zap.String("metric_id", req.ID),
+		zap.String("metric_type", string(req.MType)))
+
+	switch req.MType {
+	case types.Gauge:
+		if value, exists := s.gaugeGetter.Get(req.ID); exists {
+			return &types.GetMetricValueResponse{
+				ID:    req.ID,
+				Value: strconv.FormatFloat(value, 'f', -1, 64),
+			}, nil
+		}
+	case types.Counter:
+		if value, exists := s.counterGetter.Get(req.ID); exists {
+			return &types.GetMetricValueResponse{
+				ID:    req.ID,
+				Value: strconv.FormatInt(value, 10),
+			}, nil
+		}
+	default:
+		logger.Logger.Warn("Unknown metric type received",
+			zap.String("metric_id", req.ID),
+			zap.String("metric_type", string(req.MType)))
+		return nil, nil
+	}
+
+	logger.Logger.Warn("Metric not found",
+		zap.String("metric_id", req.ID),
+		zap.String("metric_type", string(req.MType)))
+	return nil, nil
+}
+
+// GetAllMetricValuesServiceImpl структура для реализации сервиса получения всех метрик.
+type GetAllMetricValuesService struct {
+	gaugeRanger   Ranger[string, float64]
+	counterRanger Ranger[string, int64]
+}
+
+// NewGetAllMetricValuesService создаёт новый экземпляр сервиса получения всех метрик.
+func NewGetAllMetricValuesService(
+	gaugeRanger Ranger[string, float64],
+	counterRanger Ranger[string, int64],
+) *GetAllMetricValuesService {
+	logger.Logger.Info("GetAllMetricValuesService initialized")
+	return &GetAllMetricValuesService{
+		gaugeRanger:   gaugeRanger,
+		counterRanger: counterRanger,
+	}
+}
+
+// GetAllMetricValues получает все значения метрик.
+func (s *GetAllMetricValuesService) GetAllMetricValues() []*types.GetMetricValueResponse {
+	logger.Logger.Debug("Received request to get all metric values")
+
+	var metrics []*types.GetMetricValueResponse
+
+	// Считываем все гейджи
+	s.gaugeRanger.Range(func(key string, value float64) bool {
+		metrics = append(metrics, &types.GetMetricValueResponse{
+			ID:    key,
+			Value: strconv.FormatFloat(value, 'f', -1, 64),
+		})
+		return true
+	})
+
+	// Считываем все счётчики
+	s.counterRanger.Range(func(key string, value int64) bool {
+		metrics = append(metrics, &types.GetMetricValueResponse{
+			ID:    key,
+			Value: strconv.FormatInt(value, 10),
+		})
+		return true
+	})
+
+	// Возвращаем все метрики
+	return metrics
 }

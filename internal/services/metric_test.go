@@ -158,6 +158,184 @@ func TestUpdateMetricsService_Update_UnsupportedType(t *testing.T) {
 	assert.Nil(t, resp) // No response for unsupported types
 }
 
+// Тест для успешного получения значения Gauge
+func TestGetMetricValueService_GetMetricValue_Gauge(t *testing.T) {
+	mockGaugeGetter := new(MockGaugeGetter)
+	mockCounterGetter := new(MockCounterGetter)
+
+	// Создание сервиса
+	service := NewGetMetricValueService(mockGaugeGetter, mockCounterGetter)
+
+	// Настроим ожидания для мока
+	mockGaugeGetter.On("Get", "metric1").Return(5.5, true)
+
+	req := &types.GetMetricValueRequest{
+		ID:    "metric1",
+		MType: types.Gauge,
+	}
+
+	// Вызов метода
+	resp, err := service.GetMetricValue(req)
+
+	// Проверка
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "metric1", resp.ID)
+	assert.Equal(t, "5.5", resp.Value)
+	mockGaugeGetter.AssertExpectations(t)
+}
+
+// Тест для успешного получения значения Counter
+func TestGetMetricValueService_GetMetricValue_Counter(t *testing.T) {
+	mockGaugeGetter := new(MockGaugeGetter)
+	mockCounterGetter := new(MockCounterGetter)
+
+	// Создание сервиса
+	service := NewGetMetricValueService(mockGaugeGetter, mockCounterGetter)
+
+	// Настроим ожидания для мока
+	mockCounterGetter.On("Get", "metric1").Return(int64(10), true)
+
+	req := &types.GetMetricValueRequest{
+		ID:    "metric1",
+		MType: types.Counter,
+	}
+
+	// Вызов метода
+	resp, err := service.GetMetricValue(req)
+
+	// Проверка
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "metric1", resp.ID)
+	assert.Equal(t, "10", resp.Value)
+	mockCounterGetter.AssertExpectations(t)
+}
+
+// Тест для случая, когда метрика не найдена (Gauge)
+func TestGetMetricValueService_GetMetricValue_Gauge_NotFound(t *testing.T) {
+	mockGaugeGetter := new(MockGaugeGetter)
+	mockCounterGetter := new(MockCounterGetter)
+
+	// Создание сервиса
+	service := NewGetMetricValueService(mockGaugeGetter, mockCounterGetter)
+
+	// Настроим ожидания для мока
+	mockGaugeGetter.On("Get", "metric1").Return(0.0, false)
+
+	req := &types.GetMetricValueRequest{
+		ID:    "metric1",
+		MType: types.Gauge,
+	}
+
+	// Вызов метода
+	resp, err := service.GetMetricValue(req)
+
+	// Проверка
+	assert.NoError(t, err)
+	assert.Nil(t, resp)
+	mockGaugeGetter.AssertExpectations(t)
+}
+
+// Тест для случая, когда метрика не найдена (Counter)
+func TestGetMetricValueService_GetMetricValue_Counter_NotFound(t *testing.T) {
+	mockGaugeGetter := new(MockGaugeGetter)
+	mockCounterGetter := new(MockCounterGetter)
+
+	// Создание сервиса
+	service := NewGetMetricValueService(mockGaugeGetter, mockCounterGetter)
+
+	// Настроим ожидания для мока
+	mockCounterGetter.On("Get", "metric1").Return(int64(0), false)
+
+	req := &types.GetMetricValueRequest{
+		ID:    "metric1",
+		MType: types.Counter,
+	}
+
+	// Вызов метода
+	resp, err := service.GetMetricValue(req)
+
+	// Проверка
+	assert.NoError(t, err)
+	assert.Nil(t, resp)
+	mockCounterGetter.AssertExpectations(t)
+}
+
+// Тест для случая, когда тип метрики не поддерживается
+func TestGetMetricValueService_GetMetricValue_UnsupportedType(t *testing.T) {
+	mockGaugeGetter := new(MockGaugeGetter)
+	mockCounterGetter := new(MockCounterGetter)
+
+	// Создание сервиса
+	service := NewGetMetricValueService(mockGaugeGetter, mockCounterGetter)
+
+	req := &types.GetMetricValueRequest{
+		ID:    "metric1",
+		MType: "Unsupported", // Не поддерживаемый тип
+	}
+
+	// Вызов метода
+	resp, err := service.GetMetricValue(req)
+
+	// Проверка
+	assert.NoError(t, err)
+	assert.Nil(t, resp)
+}
+
+// Мок для Ranger, реализующий метод Range для Gauge
+type MockGaugeRanger struct {
+	mock.Mock
+}
+
+func (m *MockGaugeRanger) Range(f func(key string, value float64) bool) {
+	args := m.Called(f)
+	if args.Bool(0) {
+		f("metric1", 5.5)
+		f("metric2", 10.5)
+	}
+}
+
+// Мок для Ranger, реализующий метод Range для Counter
+type MockCounterRanger struct {
+	mock.Mock
+}
+
+func (m *MockCounterRanger) Range(f func(key string, value int64) bool) {
+	args := m.Called(f)
+	if args.Bool(0) {
+		f("metric3", int64(100))
+	}
+}
+
+// Тест для получения всех значений метрик
+func TestGetAllMetricValuesService_GetAllMetricValues(t *testing.T) {
+	mockGaugeRanger := new(MockGaugeRanger)
+	mockCounterRanger := new(MockCounterRanger)
+
+	// Создание сервиса
+	service := NewGetAllMetricValuesService(mockGaugeRanger, mockCounterRanger)
+
+	// Настроим ожидания для мока
+	mockGaugeRanger.On("Range", mock.Anything).Return(true)
+	mockCounterRanger.On("Range", mock.Anything).Return(true)
+
+	// Вызов метода
+	resp := service.GetAllMetricValues()
+
+	// Проверка
+	assert.Len(t, resp, 3)
+	assert.Equal(t, "metric1", resp[0].ID)
+	assert.Equal(t, "5.5", resp[0].Value)
+	assert.Equal(t, "metric2", resp[1].ID)
+	assert.Equal(t, "10.5", resp[1].Value)
+	assert.Equal(t, "metric3", resp[2].ID)
+	assert.Equal(t, "100", resp[2].Value)
+
+	mockGaugeRanger.AssertExpectations(t)
+	mockCounterRanger.AssertExpectations(t)
+}
+
 func float64Ptr(v float64) *float64 {
 	return &v
 }
