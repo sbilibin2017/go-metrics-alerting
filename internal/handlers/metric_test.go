@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"go-metrics-alerting/internal/api/types"
-	"go-metrics-alerting/internal/api/validators"
+	"go-metrics-alerting/internal/types"
+	"go-metrics-alerting/internal/validators"
 
 	"net/http"
 	"net/http/httptest"

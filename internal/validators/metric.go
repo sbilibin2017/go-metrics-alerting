@@ -26,24 +26,24 @@ func ValidateID(id string) error {
 }
 
 // ValidateMType проверяет, является ли тип метрики допустимым.
-func ValidateMType(mType string) error {
-	if mType != string(types.Counter) && mType != string(types.Gauge) {
+func ValidateMType(mType types.MType) error {
+	if mType != types.Counter && mType != types.Gauge {
 		return ErrInvalidMType
 	}
 	return nil
 }
 
 // ValidateDelta проверяет, что Delta задана для счетчиков.
-func ValidateDelta(mType string, delta *int64) error {
-	if mType == string(types.Counter) && delta == nil {
+func ValidateDelta(mType types.MType, delta *int64) error {
+	if mType == types.Counter && delta == nil {
 		return ErrInvalidDelta
 	}
 	return nil
 }
 
 // ValidateValue проверяет, что Value задано для Gauge.
-func ValidateValue(mType string, value *float64) error {
-	if mType == string(types.Gauge) && value == nil {
+func ValidateValue(mType types.MType, value *float64) error {
+	if mType == types.Gauge && value == nil {
 		return ErrInvalidValue
 	}
 	return nil
