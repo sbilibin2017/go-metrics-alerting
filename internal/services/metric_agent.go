@@ -4,7 +4,10 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
 	"runtime"
+	"syscall"
 	"time"
 
 	"go-metrics-alerting/internal/configs"
@@ -16,7 +19,7 @@ import (
 )
 
 // Start запускает процесс сбора и отправки метрик по расписанию.
-func StartMetricsCollection(config *configs.AgentConfig, client *resty.Client, stopCh <-chan struct{}) {
+func StartMetricAgent(config *configs.AgentConfig, client *resty.Client) {
 	metricsCh := make(chan types.UpdateMetricsRequest, 100)
 
 	tickerPoll := time.NewTicker(config.PollInterval * time.Second)
@@ -24,20 +27,21 @@ func StartMetricsCollection(config *configs.AgentConfig, client *resty.Client, s
 	defer tickerPoll.Stop()
 	defer tickerReport.Stop()
 
+	// Создание канала для получения сигналов от ОС (например, SIGINT или SIGTERM)
+	signalCh := make(chan os.Signal, 1)
+	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
+
 	logger.Logger.Info("Metric collection started",
 		zap.Int("poll_interval", int(config.PollInterval)),
 		zap.Int("report_interval", int(config.ReportInterval)))
 
-	// Бесконечный цикл, который можно прервать через канал stopCh
+	// Бесконечный цикл, который можно прервать через сигнал stopCh
 	for {
 		select {
 		case <-tickerPoll.C:
 			collectMetrics(metricsCh)
 		case <-tickerReport.C:
 			sendMetrics(metricsCh, client, config.Address)
-		case <-stopCh: // Прерывание по сигналу
-			logger.Logger.Info("Metric collection stopped by stop signal")
-			return
 		}
 	}
 }
