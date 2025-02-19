@@ -14,11 +14,7 @@ func init() {
 	zapConfig.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 
 	// Строим логгер
-	var err error
-	Logger, err = zapConfig.Build(zap.AddCaller(), zap.AddCallerSkip(1))
-	if err != nil {
-		panic("Failed to initialize zap logger: " + err.Error())
-	}
+	Logger, _ = zapConfig.Build(zap.AddCaller(), zap.AddCallerSkip(1))
 
 	// Логируем информацию о том, что логгер инициализирован
 	Logger.Debug("Logger is initialized with level DEBUG")

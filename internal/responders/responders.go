@@ -2,65 +2,50 @@ package responders
 
 import (
 	"html/template"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-// Enum для типов респондера
-type ResponderType string
-
-const (
-	JSONResponder   ResponderType = "json"
-	StringResponder ResponderType = "string"
-	HTMLResponder   ResponderType = "html"
-)
-
-// Функция-ответчик для различных форматов
-func Respond(c *gin.Context, responderType ResponderType, statusCode int, payload interface{}) {
-	setHeaders(c, responderType)
-
-	switch responderType {
-	case JSONResponder:
-		c.JSON(statusCode, payload)
-	case StringResponder:
-		c.String(statusCode, payload.(string))
-	case HTMLResponder:
-		renderHTML(c, statusCode, payload)
-	}
-}
-
-// Рендеринг HTML-страницы
-func renderHTML(c *gin.Context, statusCode int, payload interface{}) {
-	tmplString, ok := payload.(string)
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid HTML template"})
-		return
-	}
-
-	tmpl, err := template.New("response").Parse(tmplString)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.Writer.WriteHeader(statusCode)
-	err = tmpl.Execute(c.Writer, c.Keys["metrics"]) // Передаем метрики в шаблон
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-	}
-}
-
-// Установка заголовков
-func setHeaders(c *gin.Context, responderType ResponderType) {
-	switch responderType {
-	case JSONResponder:
-		c.Header("Content-Type", "application/json; charset=utf-8")
-	case StringResponder:
-		c.Header("Content-Type", "text/plain; charset=utf-8")
-	case HTMLResponder:
-		c.Header("Content-Type", "text/html; charset=utf-8")
-	}
+// Общая функция для установки заголовков
+func setHeaders(c *gin.Context, contentType string) {
+	c.Header("Content-Type", contentType)
 	c.Header("Date", time.Now().UTC().Format(time.RFC1123))
+}
+
+// Вспомогательные функции
+
+func SendErrorJSON(c *gin.Context, statusCode int, message string) {
+	setHeaders(c, "application/json; charset=utf-8")
+	c.JSON(statusCode, gin.H{
+		"error": message,
+	})
+}
+
+func SendSuccessJSON(c *gin.Context, statusCode int, response interface{}) {
+	setHeaders(c, "application/json; charset=utf-8")
+	c.JSON(statusCode, response)
+}
+
+func SendSuccessText(c *gin.Context, statusCode int, message string) {
+	setHeaders(c, "text/plain; charset=utf-8")
+	c.String(statusCode, message)
+}
+
+// Функция для отправки HTML
+func SendSuccessHTML(c *gin.Context, statusCode int, templateString string, data interface{}) {
+	setHeaders(c, "text/html; charset=utf-8")
+
+	// Парсим шаблон
+	tmpl, err := template.New("response").Parse(templateString)
+	if err != nil {
+		c.String(500, "Error parsing template: "+err.Error())
+		return
+	}
+
+	// Отправляем HTML-страницу
+	err = tmpl.Execute(c.Writer, data)
+	if err != nil {
+		c.String(500, "Error rendering template: "+err.Error())
+	}
 }

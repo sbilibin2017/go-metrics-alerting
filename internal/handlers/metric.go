@@ -1,173 +1,123 @@
 package handlers
 
 import (
-	"go-metrics-alerting/internal/formatters"
 	"go-metrics-alerting/internal/responders"
-
 	"go-metrics-alerting/internal/templates"
 	"go-metrics-alerting/internal/types"
-	"go-metrics-alerting/internal/validators"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-// UpdateMetricsService определяет контракт для обновления метрик.
+// UpdateMetricsServiceInterface интерфейс для сервиса обновления метрик
 type UpdateMetricsService interface {
-	Update(req *types.UpdateMetricsRequest) (*types.UpdateMetricsResponse, error)
+	UpdateMetricValue(req *types.UpdateMetricsRequest) (*types.UpdateMetricsResponse, *types.APIErrorResponse)
+	ParseMetricValues(mtype, valueStr string) (*float64, *int64, *types.APIErrorResponse)
 }
 
-// UpdateMetricsBodyHandler обрабатывает JSON-запросы на обновление метрик.
-func UpdateMetricsBodyHandler(service UpdateMetricsService) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var req types.UpdateMetricsRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusBadRequest, err.Error())
-			return
-		}
-		if err := validators.ValidateEmptyString(req.ID); err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusNotFound, err.Error())
-			return
-		}
-		if err := validators.ValidateMType(req.MType); err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusBadRequest, err.Error())
-			return
-		}
-		if err := validators.ValidateDelta(req.MType, req.Delta); err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusBadRequest, err.Error())
-			return
-		}
-		if err := validators.ValidateValue(req.MType, req.Value); err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		resp, err := service.Update(&req)
-		if err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		responders.Respond(c, responders.JSONResponder, http.StatusOK, resp)
-	}
+// GetMetricValueServiceInterface интерфейс для сервиса получения метрики по ID
+type GetMetricValueService interface {
+	GetMetricValue(req *types.GetMetricValueRequest) (*types.GetMetricValueResponse, *types.APIErrorResponse)
 }
 
-// UpdateMetricsPathHandler обрабатывает обновление метрики через URL-параметры.
+// GetAllMetricValuesServiceInterface интерфейс для сервиса получения всех метрик
+type GetAllMetricValuesService interface {
+	GetAllMetricValues() ([]*types.GetMetricValueResponse, *types.APIErrorResponse)
+}
+
+// Обработчик для обновления метрик с параметрами пути (отправляем text/plain)
 func UpdateMetricsPathHandler(service UpdateMetricsService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mtype := c.Param("mtype")
 		id := c.Param("id")
 		valueStr := c.Param("value")
 
-		var req types.UpdateMetricsRequest
-		req.MType = types.MType(mtype)
-		req.ID = id
-
-		if err := validators.ValidateEmptyString(req.ID); err != nil {
-			responders.Respond(c, responders.StringResponder, http.StatusNotFound, err.Error())
+		value, delta, errResponse := service.ParseMetricValues(mtype, valueStr)
+		if errResponse != nil {
+			responders.SendErrorJSON(c, errResponse.Status, errResponse.Message)
 			return
 		}
 
-		if err := validators.ValidateMType(req.MType); err != nil {
-			responders.Respond(c, responders.StringResponder, http.StatusBadRequest, err.Error())
+		req := &types.UpdateMetricsRequest{
+			ID:    id,
+			MType: types.MType(mtype),
+			Delta: delta,
+			Value: value,
+		}
+
+		_, errResponse = service.UpdateMetricValue(req)
+		if errResponse != nil {
+			responders.SendErrorJSON(c, errResponse.Status, errResponse.Message)
 			return
 		}
 
-		switch mtype {
-		case string(types.Counter):
-			if err := validators.ValidateCounterValue(valueStr); err != nil {
-				responders.Respond(c, responders.StringResponder, http.StatusBadRequest, err.Error())
-				return
-			}
-			value, _ := formatters.ParseInt64(valueStr)
-			req.Delta = &value
-		case string(types.Gauge):
-			if err := validators.ValidateGaugeValue(valueStr); err != nil {
-				responders.Respond(c, responders.StringResponder, http.StatusBadRequest, err.Error())
-				return
-			}
-			value, _ := formatters.ParseFloat64(valueStr)
-			req.Value = &value
-		}
-
-		_, err := service.Update(&req)
-		if err != nil {
-			responders.Respond(c, responders.StringResponder, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		responders.Respond(c, responders.StringResponder, http.StatusOK, "OK")
+		responders.SendSuccessText(c, http.StatusOK, "OK")
 	}
 }
 
-// GetMetricValueService определяет контракт для получения значения метрики.
-type GetMetricValueService interface {
-	GetMetricValue(req *types.GetMetricValueRequest) (*types.GetMetricValueResponse, error)
+// Обработчик для обновления метрик с телом запроса (отправляем JSON)
+func UpdateMetricsBodyHandler(service UpdateMetricsService) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req types.UpdateMetricsRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			responders.SendErrorJSON(c, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		response, errResponse := service.UpdateMetricValue(&req)
+		if errResponse != nil {
+			responders.SendErrorJSON(c, errResponse.Status, errResponse.Message)
+			return
+		}
+
+		responders.SendSuccessJSON(c, http.StatusOK, response)
+	}
 }
 
-// GetMetricValueBodyHandler обрабатывает JSON-запросы на получение метрик.
+// Обработчик для получения метрики по ID с телом запроса (отправляем JSON)
 func GetMetricValueBodyHandler(service GetMetricValueService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req types.GetMetricValueRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusBadRequest, err.Error())
-			return
-		}
-		if err := validators.ValidateEmptyString(req.ID); err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusNotFound, err.Error())
-			return
-		}
-		if err := validators.ValidateMType(req.MType); err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusBadRequest, err.Error())
+			responders.SendErrorJSON(c, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
-		resp, err := service.GetMetricValue(&req)
-		if err != nil {
-			responders.Respond(c, responders.JSONResponder, http.StatusInternalServerError, err.Error())
+		response, errResponse := service.GetMetricValue(&req)
+		if errResponse != nil {
+			responders.SendErrorJSON(c, errResponse.Status, errResponse.Message)
 			return
 		}
 
-		responders.Respond(c, responders.JSONResponder, http.StatusOK, resp)
+		responders.SendSuccessJSON(c, http.StatusOK, response)
 	}
 }
 
-// GetMetricValuePathHandler обрабатывает получение метрик через URL-параметры.
+// Обработчик для получения метрики по ID с параметрами пути (отправляем text/plain)
 func GetMetricValuePathHandler(service GetMetricValueService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mtype := c.Param("mtype")
 		id := c.Param("id")
 
-		if err := validators.ValidateMType(types.MType(mtype)); err != nil {
-			responders.Respond(c, responders.StringResponder, http.StatusBadRequest, err.Error())
-			return
-		}
-
 		req := &types.GetMetricValueRequest{
-			MType: types.MType(mtype),
 			ID:    id,
+			MType: types.MType(mtype),
 		}
 
-		resp, err := service.GetMetricValue(req)
-		if err != nil {
-			responders.Respond(c, responders.StringResponder, http.StatusNotFound, err.Error())
+		_, errResponse := service.GetMetricValue(req)
+		if errResponse != nil {
+			responders.SendErrorJSON(c, errResponse.Status, errResponse.Message)
 			return
 		}
 
-		responders.Respond(c, responders.StringResponder, http.StatusOK, resp.Value)
+		responders.SendSuccessText(c, http.StatusOK, "OK")
 	}
 }
 
-// GetAllMetricValuesService определяет контракт для получения всех метрик.
-type GetAllMetricValuesService interface {
-	GetAllMetricValues() []*types.GetMetricValueResponse
-}
-
-// GetAllMetricValuesHandler обрабатывает запрос и возвращает HTML-страницу со списком метрик.
+// Обработчик для получения всех метрик (отправляем HTML)
 func GetAllMetricValuesHandler(service GetAllMetricValuesService) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		metrics := service.GetAllMetricValues()
-		c.Set("metrics", metrics)
-		responders.Respond(c, responders.HTMLResponder, http.StatusOK, templates.MetricsTemplate)
+		metrics, _ := service.GetAllMetricValues()
+		responders.SendSuccessHTML(c, http.StatusOK, templates.MetricsTemplate, metrics)
 	}
 }

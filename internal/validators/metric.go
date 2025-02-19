@@ -6,9 +6,7 @@ import (
 	"strconv"
 )
 
-const EmptyString string = ""
-
-// Определяем ошибки валидации как константы.
+// Ошибки валидации
 var (
 	ErrEmptyID           = errors.New("id cannot be empty")
 	ErrInvalidMType      = errors.New("invalid metric type")
@@ -18,41 +16,50 @@ var (
 	ErrInvalidGaugeVal   = errors.New("gauge value must be a valid float")
 )
 
-// ValidateEmptyString проверяет, что ID не пустой.
-func ValidateEmptyString(id string) error {
-	if id == EmptyString {
+// ValidateEmptyString валидатор для проверки пустой строки
+type ValidateEmptyString struct{}
+
+func (v *ValidateEmptyString) Validate(id string) error {
+	if id == "" {
 		return ErrEmptyID
 	}
 	return nil
 }
 
-// ValidateMType проверяет, является ли тип метрики допустимым.
-func ValidateMType(mType types.MType) error {
+// ValidateMType валидатор для проверки типа метрики
+type ValidateMType struct{}
+
+func (v *ValidateMType) Validate(mType types.MType) error {
 	if mType != types.Counter && mType != types.Gauge {
 		return ErrInvalidMType
 	}
 	return nil
 }
 
-// ValidateDelta проверяет, что Delta задана для счетчиков.
-func ValidateDelta(mType types.MType, delta *int64) error {
+// ValidateDelta валидатор для проверки Delta для счетчиков
+type ValidateDelta struct{}
+
+func (v *ValidateDelta) Validate(mType types.MType, delta *int64) error {
 	if mType == types.Counter && delta == nil {
 		return ErrInvalidDelta
 	}
 	return nil
 }
 
-// ValidateValue проверяет, что Value задано для Gauge.
-func ValidateValue(mType types.MType, value *float64) error {
+// ValidateValue валидатор для проверки Value для Gauge
+type ValidateValue struct{}
+
+func (v *ValidateValue) Validate(mType types.MType, value *float64) error {
 	if mType == types.Gauge && value == nil {
 		return ErrInvalidValue
 	}
 	return nil
 }
 
-// ValidateCounterValue проверяет, что значение для счетчика является допустимым целым числом.
-func ValidateCounterValue(value string) error {
-	// Преобразуем строку в int64 для счетчика
+// ValidateCounterValue валидатор для проверки значения для счетчика
+type ValidateCounterValue struct{}
+
+func (v *ValidateCounterValue) Validate(value string) error {
 	_, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return ErrInvalidCounterVal
@@ -60,9 +67,10 @@ func ValidateCounterValue(value string) error {
 	return nil
 }
 
-// ValidateGaugeValue проверяет, что значение для Gauge является допустимым числом с плавающей точкой.
-func ValidateGaugeValue(value string) error {
-	// Преобразуем строку в float64 для Gauge
+// ValidateGaugeValue валидатор для проверки значения для Gauge
+type ValidateGaugeValue struct{}
+
+func (v *ValidateGaugeValue) Validate(value string) error {
 	_, err := strconv.ParseFloat(value, 64)
 	if err != nil {
 		return ErrInvalidGaugeVal

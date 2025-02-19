@@ -7,19 +7,20 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// UpdateMetricsService определяет контракт для обновления метрик.
+// UpdateMetricsServiceInterface интерфейс для сервиса обновления метрик
 type UpdateMetricsService interface {
-	Update(req *types.UpdateMetricsRequest) (*types.UpdateMetricsResponse, error)
+	UpdateMetricValue(req *types.UpdateMetricsRequest) (*types.UpdateMetricsResponse, *types.APIErrorResponse)
+	ParseMetricValues(mtype, valueStr string) (*float64, *int64, *types.APIErrorResponse)
 }
 
-// GetMetricValueService определяет контракт для получения значения метрики.
+// GetMetricValueServiceInterface интерфейс для сервиса получения метрики по ID
 type GetMetricValueService interface {
-	GetMetricValue(req *types.GetMetricValueRequest) (*types.GetMetricValueResponse, error)
+	GetMetricValue(req *types.GetMetricValueRequest) (*types.GetMetricValueResponse, *types.APIErrorResponse)
 }
 
-// GetAllMetricValuesService интерфейс для сервиса работы с метриками.
+// GetAllMetricValuesServiceInterface интерфейс для сервиса получения всех метрик
 type GetAllMetricValuesService interface {
-	GetAllMetricValues() []*types.GetMetricValueResponse
+	GetAllMetricValues() ([]*types.GetMetricValueResponse, *types.APIErrorResponse)
 }
 
 // RegisterMetricRoutes регистрирует маршруты для метрик
