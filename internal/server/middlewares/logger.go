@@ -15,14 +15,10 @@ type Logger interface {
 func LoggerMiddleware(logger Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
-
 		uri := c.FullPath()
 		method := c.Request.Method
-
 		c.Next()
-
 		duration := time.Since(start)
-
 		logger.Info("Request processed",
 			zap.String("method", method),
 			zap.String("uri", uri),

@@ -1,7 +1,7 @@
 package routers
 
 import (
-	"go-metrics-alerting/internal/types"
+	"go-metrics-alerting/internal/server/types"
 	"net/http"
 	"net/http/httptest"
 	"testing"

@@ -1,74 +1,147 @@
 package agent
 
 import (
-	"flag"
 	"fmt"
-	"go-metrics-alerting/internal/configs"
-	"go-metrics-alerting/internal/services"
 	"log"
+	"math/rand"
+	"os"
+	"runtime"
+	"strings"
 	"time"
 
-	"github.com/caarlos0/env"
 	"github.com/go-resty/resty/v2"
-	"github.com/joho/godotenv"
 )
 
-func RunAgent() {
-	// Загружаем переменные окружения из .env файла
-	if err := godotenv.Load(); err != nil {
-		log.Println("Error loading .env file")
+type MType string
+
+const (
+	Gauge   MType = "gauge"
+	Counter MType = "counter"
+)
+
+type UpdateMetricsRequest struct {
+	ID    string   `json:"id"`
+	MType MType    `json:"mtype"`
+	Delta *int64   `json:"delta,omitempty"`
+	Value *float64 `json:"value,omitempty"`
+}
+
+type AgentConfig struct {
+	PollInterval   time.Duration `env:"POLL_INTERVAL"`   // Интервал опроса
+	ReportInterval time.Duration `env:"REPORT_INTERVAL"` // Интервал отчётов
+	Address        string        `env:"ADDRESS"`         // Адрес агента
+}
+
+func StartAgent(signalCh chan os.Signal, config *AgentConfig, client *resty.Client) {
+	log.Printf("Starting agent with config: Address=%s, PollInterval=%v, ReportInterval=%v", config.Address, config.PollInterval, config.ReportInterval)
+
+	metricsCh := make(chan UpdateMetricsRequest, 100)
+
+	tickerPoll := time.NewTicker(config.PollInterval)
+	tickerReport := time.NewTicker(config.ReportInterval)
+	defer tickerPoll.Stop()
+	defer tickerReport.Stop()
+
+	for {
+		select {
+		case <-signalCh:
+			log.Println("Received shutdown signal. Stopping agent...")
+			return
+		case <-tickerPoll.C:
+			log.Println("Collecting metrics...")
+			collectMetrics(metricsCh)
+		case <-tickerReport.C:
+			log.Println("Sending metrics...")
+			sendMetrics(metricsCh, client, config.Address)
+		}
 	}
+}
 
-	// Чтение конфигурации из переменных окружения
-	var config configs.AgentConfig
-	if err := env.Parse(&config); err != nil {
-		log.Fatalf("Failed to parse environment variables: %v", err)
+func collectMetrics(metricsCh chan UpdateMetricsRequest) {
+	metrics := append(collectGaugeMetrics(), collectCounterMetrics()()...)
+	log.Printf("Collected %d metrics", len(metrics))
+	for _, metric := range metrics {
+		metricsCh <- metric
 	}
+}
 
-	// Обработка флага командной строки для адреса
-	addressFlag := flag.String("address", "", "Address for HTTP server")
-	reportIntervalFlag := flag.Int("reportInterval", 0, "Report interval in seconds")
-	pollIntervalFlag := flag.Int("pollInterval", 0, "Poll interval in seconds")
-	flag.Parse()
-
-	// Приоритет значений:
-	// 1. Переменная окружения (если указана)
-	// 2. Флаг командной строки (если указан)
-	// 3. Значение по умолчанию
-
-	if *addressFlag != "" {
-		config.Address = *addressFlag
+func sendMetrics(metricsCh chan UpdateMetricsRequest, client *resty.Client, address string) {
+	for {
+		select {
+		case metric := <-metricsCh:
+			log.Printf("Sending metric: %v", metric)
+			sendMetric(metric, client, address)
+		default:
+			return
+		}
 	}
+}
 
-	if *reportIntervalFlag != 0 {
-		// Преобразуем интервалы в time.Duration
-		config.ReportInterval = time.Duration(*reportIntervalFlag) * time.Second
+func sendMetric(metric UpdateMetricsRequest, client *resty.Client, address string) {
+	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
+		address = fmt.Sprintf("http://%s", address)
 	}
-
-	if *pollIntervalFlag != 0 {
-		// Преобразуем интервалы в time.Duration
-		config.PollInterval = time.Duration(*pollIntervalFlag) * time.Second
+	log.Printf("Sending metric to address: %s", address)
+	_, err := client.R().SetHeader("Content-Type", "application/json").SetBody(metric).Post(address + "/update/")
+	if err != nil {
+		log.Printf("Error sending metric: %v", err)
+	} else {
+		log.Println("Metric sent successfully")
 	}
+}
 
-	// Проверка значений конфигурации
-	if config.Address == "" {
-		log.Fatal("ADDRESS is required")
+func collectGaugeMetrics() []UpdateMetricsRequest {
+	newGaugeMetric := func(id string, value interface{}) UpdateMetricsRequest {
+		var floatValue *float64
+		switch v := value.(type) {
+		case uint64:
+			f := float64(v)
+			floatValue = &f
+		case uint32:
+			f := float64(v)
+			floatValue = &f
+		case float64:
+			floatValue = &v
+		}
+
+		return UpdateMetricsRequest{
+			MType: Gauge,
+			ID:    id,
+			Value: floatValue,
+		}
 	}
-	if config.ReportInterval == 0 {
-		log.Fatal("REPORT_INTERVAL is required")
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	return []UpdateMetricsRequest{
+		newGaugeMetric("Alloc", ms.Alloc),
+		newGaugeMetric("BuckHashSys", ms.BuckHashSys),
+		newGaugeMetric("Frees", ms.Frees),
+		newGaugeMetric("GCCPUFraction", ms.GCCPUFraction),
+		newGaugeMetric("HeapAlloc", ms.HeapAlloc),
+		newGaugeMetric("HeapIdle", ms.HeapIdle),
+		newGaugeMetric("HeapInuse", ms.HeapInuse),
+		newGaugeMetric("HeapObjects", ms.HeapObjects),
+		newGaugeMetric("HeapReleased", ms.HeapReleased),
+		newGaugeMetric("HeapSys", ms.HeapSys),
+		newGaugeMetric("NumGC", ms.NumGC),
+		newGaugeMetric("Sys", ms.Sys),
+		newGaugeMetric("TotalAlloc", ms.TotalAlloc),
+		newGaugeMetric("RandomValue", rand.Float64()),
 	}
-	if config.PollInterval == 0 {
-		log.Fatal("POLL_INTERVAL is required")
+}
+
+// collectCounterMetrics обновляет переменную pollCount и возвращает замыкание для дальнейшего обновления
+func collectCounterMetrics() func() []UpdateMetricsRequest {
+	var pollCount int64
+	return func() []UpdateMetricsRequest {
+		pollCount++
+		delta := pollCount
+		return []UpdateMetricsRequest{
+			{
+				MType: Counter,
+				ID:    "PollCount",
+				Delta: &delta,
+			},
+		}
 	}
-
-	// Выводим конфигурацию для проверки
-	fmt.Printf("Address: %s\n", config.Address)
-	fmt.Printf("Report Interval: %v\n", config.ReportInterval)
-	fmt.Printf("Poll Interval: %v\n", config.PollInterval)
-
-	// Создаем HTTP клиент
-	client := resty.New()
-
-	// Запуск агента сбора метрик
-	services.StartMetricAgent(&config, client)
 }

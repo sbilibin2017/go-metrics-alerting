@@ -42,10 +42,7 @@ func TestRange(t *testing.T) {
 
 	ranger.Range(func(key, value string) bool {
 		found[key] = true
-		if key == stoppedAt {
-			return false
-		}
-		return true
+		return key != stoppedAt // заменили на это условие
 	})
 
 	assert.True(t, found["key1"], "Expected to find key1")

@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"go-metrics-alerting/internal/responders"
-	"go-metrics-alerting/internal/templates"
-	"go-metrics-alerting/internal/types"
-	"go-metrics-alerting/internal/validators"
+	"go-metrics-alerting/internal/server/responders"
+	"go-metrics-alerting/internal/server/templates"
+	"go-metrics-alerting/internal/server/types"
+	"go-metrics-alerting/internal/server/validators"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
