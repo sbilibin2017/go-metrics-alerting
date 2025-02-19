@@ -29,7 +29,9 @@ func RegisterMetricRoutes(
 	getMetricValueService GetMetricValueService,
 	getAllMetricValuesService GetAllMetricValuesService,
 ) {
-	router.POST("/update/", handlers.UpdateMetricsHandler(updateMetricsService))
-	router.POST("/value/", handlers.GetMetricValueHandler(getMetricValueService))
+	router.POST("/update/", handlers.UpdateMetricsBodyHandler(updateMetricsService))
+	router.POST("/update/:mtype/:id/:value", handlers.UpdateMetricsPathHandler(updateMetricsService))
+	router.POST("/value/", handlers.GetMetricValueBodyHandler(getMetricValueService))
+	router.GET("/value/:mtype/:id", handlers.GetMetricValuePathHandler(getMetricValueService))
 	router.GET("/", handlers.GetAllMetricValuesHandler(getAllMetricValuesService))
 }

@@ -18,7 +18,7 @@ func TestValidateID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
-			err := ValidateID(tt.id)
+			err := ValidateEmptyString(tt.id)
 			assert.Equal(t, tt.expectedErr, err)
 		})
 	}

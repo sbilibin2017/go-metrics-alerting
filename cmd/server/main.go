@@ -35,8 +35,7 @@ func main() {
 	r := gin.New()
 	r.RedirectTrailingSlash = false
 
-	// Мидлваре
-	r.Use(middlewares.JSONContentTypeMiddleware())
+	// Мидлвар
 	r.Use(middlewares.LoggerMiddleware(logger.Logger))
 
 	// Инициализация хранилища и сервисов
