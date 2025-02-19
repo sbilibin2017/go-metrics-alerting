@@ -2,12 +2,12 @@ package main
 
 import (
 	"flag"
-	"go-metrics-alerting/internal/server/configs"
-	"go-metrics-alerting/internal/server/logger"
-	"go-metrics-alerting/internal/server/middlewares"
-	"go-metrics-alerting/internal/server/routers"
-	"go-metrics-alerting/internal/server/services"
-	"go-metrics-alerting/internal/server/storage"
+	"go-metrics-alerting/internal/configs"
+	"go-metrics-alerting/internal/logger"
+	"go-metrics-alerting/internal/middlewares"
+	"go-metrics-alerting/internal/routers"
+	"go-metrics-alerting/internal/services"
+	"go-metrics-alerting/internal/storage"
 	"log"
 
 	"github.com/caarlos0/env"
@@ -15,9 +15,6 @@ import (
 )
 
 func main() {
-	// // Загружаем .env файл
-	// godotenv.Load()
-
 	// Создание конфигурации
 	var config configs.ServerConfig
 	env.Parse(&config)
