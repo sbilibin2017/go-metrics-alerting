@@ -27,9 +27,9 @@ type UpdateMetricsRequest struct {
 }
 
 type AgentConfig struct {
-	PollInterval   time.Duration `env:"POLL_INTERVAL"`   // Интервал опроса
-	ReportInterval time.Duration `env:"REPORT_INTERVAL"` // Интервал отчётов
-	Address        string        `env:"ADDRESS"`         // Адрес агента
+	PollInterval   time.Duration `env:"POLL_INTERVAL" envDefault:"2s"`    // Интервал опроса, дефолтное значение 2 секунды
+	ReportInterval time.Duration `env:"REPORT_INTERVAL" envDefault:"10s"` // Интервал отчётов, дефолтное значение 10 секунд
+	Address        string        `env:"ADDRESS" envDefault:"localhost:8080"`
 }
 
 func StartAgent(signalCh chan os.Signal, config *AgentConfig, client *resty.Client) {
