@@ -8,6 +8,7 @@ import (
 	"go-metrics-alerting/internal/server/routers"
 	"go-metrics-alerting/internal/server/services"
 	"go-metrics-alerting/internal/server/storage"
+	"log"
 
 	"github.com/caarlos0/env"
 	"github.com/gin-gonic/gin"
@@ -56,6 +57,9 @@ func main() {
 		getAllMetricValuesService,
 	)
 
+	log.Printf("Starting server on %s", config.Address)
+
 	// Запуск сервера
 	r.Run(config.Address)
+
 }
