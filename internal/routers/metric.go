@@ -1,8 +1,8 @@
 package routers
 
 import (
-	"go-metrics-alerting/internal/server/handlers"
-	"go-metrics-alerting/internal/server/types"
+	"go-metrics-alerting/internal/handlers"
+	"go-metrics-alerting/internal/types"
 
 	"github.com/gin-gonic/gin"
 )

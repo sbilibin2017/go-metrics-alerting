@@ -1,7 +1,7 @@
 package validators
 
 import (
-	"go-metrics-alerting/internal/server/types"
+	"go-metrics-alerting/internal/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"

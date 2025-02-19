@@ -2,7 +2,7 @@ package validators
 
 import (
 	"errors"
-	"go-metrics-alerting/internal/server/types"
+	"go-metrics-alerting/internal/types"
 	"strconv"
 )
 

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"go-metrics-alerting/internal/agent"
+	"go-metrics-alerting/internal/configs"
 	"log"
 	"os"
 	"os/signal"
@@ -17,9 +18,7 @@ func main() {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// godotenv.Load()
-
-	var config agent.AgentConfig
+	var config configs.AgentConfig
 
 	env.Parse(&config)
 

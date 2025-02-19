@@ -1,7 +1,7 @@
 package services
 
 import (
-	"go-metrics-alerting/internal/server/types"
+	"go-metrics-alerting/internal/types"
 	"strconv"
 	"testing"
 

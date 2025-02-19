@@ -2,6 +2,8 @@ package agent
 
 import (
 	"encoding/json"
+	"go-metrics-alerting/internal/configs"
+	"go-metrics-alerting/internal/types"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -48,11 +50,11 @@ func TestSendMetric(t *testing.T) {
 		assert.Equal(t, "/update/", r.URL.Path)
 		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
-		var receivedMetric UpdateMetricsRequest
+		var receivedMetric types.UpdateMetricsRequest
 		err := json.NewDecoder(r.Body).Decode(&receivedMetric)
 		assert.NoError(t, err)
 
-		assert.Equal(t, Counter, receivedMetric.MType)
+		assert.Equal(t, types.Counter, receivedMetric.MType)
 		assert.Equal(t, "TestCounter", receivedMetric.ID)
 		assert.Equal(t, int64(1), *receivedMetric.Delta)
 
@@ -62,8 +64,8 @@ func TestSendMetric(t *testing.T) {
 
 	// Тестовые данные
 	delta := int64(1)
-	metric := UpdateMetricsRequest{
-		MType: Counter,
+	metric := types.UpdateMetricsRequest{
+		MType: types.Counter,
 		ID:    "TestCounter",
 		Delta: &delta,
 	}
@@ -77,14 +79,14 @@ func TestSendMetric(t *testing.T) {
 }
 
 func TestCollectMetrics(t *testing.T) {
-	metricsCh := make(chan UpdateMetricsRequest, 10) // Буферизованный канал
+	metricsCh := make(chan types.UpdateMetricsRequest, 10) // Буферизованный канал
 
 	go func() {
 		collectMetrics(metricsCh) // Собираем метрики в отдельной горутине
 		close(metricsCh)          // Закрываем канал после завершения
 	}()
 
-	var metrics []UpdateMetricsRequest
+	var metrics []types.UpdateMetricsRequest
 	for metric := range metricsCh {
 		metrics = append(metrics, metric)
 	}
@@ -93,11 +95,11 @@ func TestCollectMetrics(t *testing.T) {
 }
 
 func TestSendMetrics(t *testing.T) {
-	metricsCh := make(chan UpdateMetricsRequest, 10)
+	metricsCh := make(chan types.UpdateMetricsRequest, 10)
 	delta := float64(123)
-	metricsCh <- UpdateMetricsRequest{
+	metricsCh <- types.UpdateMetricsRequest{
 		ID:    "TestMetric",
-		MType: Gauge,
+		MType: types.Gauge,
 		Value: &delta,
 	}
 
@@ -111,7 +113,7 @@ func TestStartAgent(t *testing.T) {
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 
 	// Настроим конфиг с короткими интервалами
-	config := &AgentConfig{
+	config := &configs.AgentConfig{
 		PollInterval:   10 * time.Millisecond,
 		ReportInterval: 20 * time.Millisecond,
 		Address:        "http://localhost:8080",

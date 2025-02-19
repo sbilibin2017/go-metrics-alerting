@@ -2,6 +2,8 @@ package agent
 
 import (
 	"fmt"
+	"go-metrics-alerting/internal/configs"
+	"go-metrics-alerting/internal/types"
 	"log"
 	"math/rand"
 	"os"
@@ -12,30 +14,10 @@ import (
 	"github.com/go-resty/resty/v2"
 )
 
-type MType string
-
-const (
-	Gauge   MType = "gauge"
-	Counter MType = "counter"
-)
-
-type UpdateMetricsRequest struct {
-	ID    string   `json:"id"`
-	MType MType    `json:"mtype"`
-	Delta *int64   `json:"delta,omitempty"`
-	Value *float64 `json:"value,omitempty"`
-}
-
-type AgentConfig struct {
-	PollInterval   time.Duration `env:"POLL_INTERVAL" envDefault:"2s"`    // Интервал опроса, дефолтное значение 2 секунды
-	ReportInterval time.Duration `env:"REPORT_INTERVAL" envDefault:"10s"` // Интервал отчётов, дефолтное значение 10 секунд
-	Address        string        `env:"ADDRESS" envDefault:"localhost:8080"`
-}
-
-func StartAgent(signalCh chan os.Signal, config *AgentConfig, client *resty.Client) {
+func StartAgent(signalCh chan os.Signal, config *configs.AgentConfig, client *resty.Client) {
 	log.Printf("Starting agent with config: Address=%s, PollInterval=%v, ReportInterval=%v", config.Address, config.PollInterval, config.ReportInterval)
 
-	metricsCh := make(chan UpdateMetricsRequest, 100)
+	metricsCh := make(chan types.UpdateMetricsRequest, 100)
 
 	tickerPoll := time.NewTicker(config.PollInterval)
 	tickerReport := time.NewTicker(config.ReportInterval)
@@ -57,7 +39,7 @@ func StartAgent(signalCh chan os.Signal, config *AgentConfig, client *resty.Clie
 	}
 }
 
-func collectMetrics(metricsCh chan UpdateMetricsRequest) {
+func collectMetrics(metricsCh chan types.UpdateMetricsRequest) {
 	metrics := append(collectGaugeMetrics(), collectCounterMetrics()()...)
 	log.Printf("Collected %d metrics", len(metrics))
 	for _, metric := range metrics {
@@ -65,7 +47,7 @@ func collectMetrics(metricsCh chan UpdateMetricsRequest) {
 	}
 }
 
-func sendMetrics(metricsCh chan UpdateMetricsRequest, client *resty.Client, address string) {
+func sendMetrics(metricsCh chan types.UpdateMetricsRequest, client *resty.Client, address string) {
 	for {
 		select {
 		case metric := <-metricsCh:
@@ -77,7 +59,7 @@ func sendMetrics(metricsCh chan UpdateMetricsRequest, client *resty.Client, addr
 	}
 }
 
-func sendMetric(metric UpdateMetricsRequest, client *resty.Client, address string) {
+func sendMetric(metric types.UpdateMetricsRequest, client *resty.Client, address string) {
 	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
 		address = fmt.Sprintf("http://%s", address)
 	}
@@ -90,8 +72,8 @@ func sendMetric(metric UpdateMetricsRequest, client *resty.Client, address strin
 	}
 }
 
-func collectGaugeMetrics() []UpdateMetricsRequest {
-	newGaugeMetric := func(id string, value interface{}) UpdateMetricsRequest {
+func collectGaugeMetrics() []types.UpdateMetricsRequest {
+	newGaugeMetric := func(id string, value interface{}) types.UpdateMetricsRequest {
 		var floatValue *float64
 		switch v := value.(type) {
 		case uint64:
@@ -104,15 +86,15 @@ func collectGaugeMetrics() []UpdateMetricsRequest {
 			floatValue = &v
 		}
 
-		return UpdateMetricsRequest{
-			MType: Gauge,
+		return types.UpdateMetricsRequest{
+			MType: types.Gauge,
 			ID:    id,
 			Value: floatValue,
 		}
 	}
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
-	return []UpdateMetricsRequest{
+	return []types.UpdateMetricsRequest{
 		newGaugeMetric("Alloc", ms.Alloc),
 		newGaugeMetric("BuckHashSys", ms.BuckHashSys),
 		newGaugeMetric("Frees", ms.Frees),
@@ -131,14 +113,14 @@ func collectGaugeMetrics() []UpdateMetricsRequest {
 }
 
 // collectCounterMetrics обновляет переменную pollCount и возвращает замыкание для дальнейшего обновления
-func collectCounterMetrics() func() []UpdateMetricsRequest {
+func collectCounterMetrics() func() []types.UpdateMetricsRequest {
 	var pollCount int64
-	return func() []UpdateMetricsRequest {
+	return func() []types.UpdateMetricsRequest {
 		pollCount++
 		delta := pollCount
-		return []UpdateMetricsRequest{
+		return []types.UpdateMetricsRequest{
 			{
-				MType: Counter,
+				MType: types.Counter,
 				ID:    "PollCount",
 				Delta: &delta,
 			},
