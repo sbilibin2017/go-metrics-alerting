@@ -12,12 +12,11 @@ import (
 
 	"github.com/caarlos0/env"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Загружаем .env файл
-	godotenv.Load()
+	// // Загружаем .env файл
+	// godotenv.Load()
 
 	// Создание конфигурации
 	var config configs.ServerConfig

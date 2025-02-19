@@ -11,14 +11,13 @@ import (
 
 	"github.com/caarlos0/env"
 	"github.com/go-resty/resty/v2"
-	"github.com/joho/godotenv"
 )
 
 func main() {
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, syscall.SIGINT, syscall.SIGTERM)
 
-	godotenv.Load()
+	// godotenv.Load()
 
 	var config agent.AgentConfig
 
