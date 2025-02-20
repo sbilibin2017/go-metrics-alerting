@@ -15,12 +15,17 @@ type UpdateMetricStrategy interface {
 
 // UpdateMetricsService структура для обработки обновлений метрик
 type UpdateMetricsService struct {
-	strategy UpdateMetricStrategy
+	strategies map[domain.MType]UpdateMetricStrategy
+}
+
+// NewUpdateMetricsService создает новый экземпляр UpdateMetricsService
+func NewUpdateMetricsService(strategies map[domain.MType]UpdateMetricStrategy) *UpdateMetricsService {
+	return &UpdateMetricsService{strategies: strategies}
 }
 
 // UpdateMetricValue обновляет значение метрики, используя стратегию
 func (s *UpdateMetricsService) UpdateMetricValue(metric *domain.Metric) (*domain.Metric, error) {
-	updatedMetric, ok := s.strategy.Update(metric)
+	updatedMetric, ok := s.strategies[metric.MType].Update(metric)
 	if !ok {
 		return nil, ErrUpdateFailed
 	}
@@ -45,6 +50,14 @@ type GetMetricValueService struct {
 	encoder KeyEncoder
 }
 
+// NewGetMetricValueService создает новый экземпляр GetMetricValueService
+func NewGetMetricValueService(getter Getter, encoder KeyEncoder) *GetMetricValueService {
+	return &GetMetricValueService{
+		getter:  getter,
+		encoder: encoder,
+	}
+}
+
 // Метод для получения значения метрики
 func (s *GetMetricValueService) GetMetricValue(id string, mType domain.MType) (*domain.Metric, error) {
 	if valueStr, exists := s.getter.Get(s.encoder.Encode(id, string(mType))); exists {
@@ -61,6 +74,7 @@ func (s *GetMetricValueService) GetMetricValue(id string, mType domain.MType) (*
 type Ranger interface {
 	Range(callback func(id, value string) bool)
 }
+
 type KeyDecoder interface {
 	Decode(key string) (id string, mtype string, ok bool)
 }
@@ -69,6 +83,14 @@ type KeyDecoder interface {
 type GetAllMetricValuesService struct {
 	ranger  Ranger
 	decoder KeyDecoder
+}
+
+// NewGetAllMetricValuesService создает новый экземпляр GetAllMetricValuesService
+func NewGetAllMetricValuesService(ranger Ranger, decoder KeyDecoder) *GetAllMetricValuesService {
+	return &GetAllMetricValuesService{
+		ranger:  ranger,
+		decoder: decoder,
+	}
 }
 
 // Метод для получения всех метрик

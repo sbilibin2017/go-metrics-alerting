@@ -1,61 +1,46 @@
 package main
 
 import (
-	"flag"
-	"go-metrics-alerting/internal/configs"
-	"go-metrics-alerting/internal/logger"
-	"go-metrics-alerting/internal/middlewares"
+	"go-metrics-alerting/internal/domain"
+	"go-metrics-alerting/internal/handlers"
+	"go-metrics-alerting/internal/keyprocessor"
 	"go-metrics-alerting/internal/routers"
 	"go-metrics-alerting/internal/services"
 	"go-metrics-alerting/internal/storage"
-	"log"
-
-	"github.com/caarlos0/env"
-	"github.com/gin-gonic/gin"
+	"go-metrics-alerting/internal/strategies"
 )
 
 func main() {
-	// Создание конфигурации
-	var config configs.ServerConfig
-	env.Parse(&config)
+	// Инициализация хранилища
+	strg := storage.NewStorage()
 
-	// Проверка наличия флага для адреса
-	addressFlag := flag.String("address", "", "Address for HTTP server")
-	flag.Parse()
+	// Инициализация Saver, Getter и Ranger через их конструкторы
+	saver := storage.NewSaver(strg)   // Создание нового Saver
+	getter := storage.NewGetter(strg) // Создание нового Getter
+	ranger := storage.NewRanger(strg) // Создание нового Ranger
 
-	// Если адрес из .env не установлен, используем флаг
-	if config.Address == "" {
-		config.Address = *addressFlag
+	keyEncoder := keyprocessor.NewKeyEncoder()
+	keyDecoder := keyprocessor.NewKeyDecoder()
+
+	// Инициализация стратегий с использованием конструктора
+	updateGaugeStrategy := strategies.NewUpdateGaugeStrategy(saver, keyEncoder)
+	updateCounterStrategy := strategies.NewUpdateCounterStrategy(saver, getter, keyEncoder)
+	updateStrategies := map[domain.MType]services.UpdateMetricStrategy{
+		domain.Gauge:   updateGaugeStrategy,
+		domain.Counter: updateCounterStrategy,
 	}
 
-	// Создание нового gin сервера
-	r := gin.New()
-	r.RedirectTrailingSlash = false
+	updateMetricsService := services.NewUpdateMetricsService(updateStrategies)
+	getMetricValueService := services.NewGetMetricValueService(getter, keyEncoder)
+	getAllMetricValuesService := services.NewGetAllMetricValuesService(ranger, keyDecoder)
 
-	// Мидлвар
-	r.Use(middlewares.LoggerMiddleware(logger.Logger))
+	h1 := handlers.UpdateMetricsBodyHandler(updateMetricsService)
+	h2 := handlers.UpdateMetricsPathHandler(updateMetricsService)
+	h3 := handlers.GetMetricValueBodyHandler(getMetricValueService)
+	h4 := handlers.GetMetricValuePathHandler(getMetricValueService)
+	h5 := handlers.GetAllMetricValuesHandler(getAllMetricValuesService)
 
-	// Инициализация хранилища и сервисов
-	s := storage.NewStorage()
-	saver := storage.NewSaver(s)
-	getter := storage.NewGetter(s)
-	ranger := storage.NewRanger(s)
+	routers.RegisterMetricRoutes(r, h1, h2, h3, h4, h5)
 
-	updateMetricsService := services.NewUpdateMetricsService(saver, getter)
-	getMetricValueService := services.NewGetMetricValueService(getter)
-	getAllMetricValuesService := services.NewGetAllMetricValuesService(ranger)
-
-	// Регистрация маршрутов
-	routers.RegisterMetricRoutes(
-		r,
-		updateMetricsService,
-		getMetricValueService,
-		getAllMetricValuesService,
-	)
-
-	log.Printf("Starting server on %s", config.Address)
-
-	// Запуск сервера
-	r.Run(config.Address)
-
+	r.Run()
 }

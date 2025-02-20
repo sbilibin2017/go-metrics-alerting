@@ -31,18 +31,16 @@ func NewMetricFacade(client *resty.Client, config *configs.AgentConfig, logger *
 }
 
 // UpdateMetrics метод для обновления метрик
-func (s *MetricFacade) UpdateMetrics(metrics []*domain.Metric) {
-	for _, metric := range metrics {
-		s.logger.Debug("Sending metric", zap.String("metricID", metric.ID), zap.String("metricValue", metric.Value))
-		resp, err := s.client.R().
-			SetHeader("Content-Type", "application/json").
-			SetBody(metric).
-			Post(s.config.Address + "/update/")
-		if err != nil || resp.StatusCode() >= 400 {
-			s.logger.Error("Error sending metric", zap.Error(err), zap.String("metricID", metric.ID))
-		} else {
-			s.logger.Info("Metric sent successfully", zap.String("metricID", metric.ID))
-		}
-
+func (s *MetricFacade) UpdateMetric(metric *domain.Metric) {
+	s.logger.Debug("Sending metric", zap.String("metricID", metric.ID), zap.String("metricValue", metric.Value))
+	resp, err := s.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(metric).
+		Post(s.config.Address + "/update/")
+	if err != nil || resp.StatusCode() >= 400 {
+		s.logger.Error("Error sending metric", zap.Error(err), zap.String("metricID", metric.ID))
+	} else {
+		s.logger.Info("Metric sent successfully", zap.String("metricID", metric.ID))
 	}
+
 }

@@ -1,4 +1,4 @@
-package encoding
+package keyprocessor
 
 import (
 	"strings"
@@ -10,6 +10,10 @@ const sep string = ":"
 // KeyEncoder структура для кодирования ключей
 type KeyEncoder struct{}
 
+func NewKeyEncoder() *KeyEncoder {
+	return &KeyEncoder{}
+}
+
 // Метод Encode для кодирования id и mtype в строку с использованием strings.Join
 func (e *KeyEncoder) Encode(id string, mtype string) string {
 	return strings.Join([]string{id, mtype}, sep)
@@ -17,6 +21,10 @@ func (e *KeyEncoder) Encode(id string, mtype string) string {
 
 // KeyDecoder структура для декодирования ключей
 type KeyDecoder struct{}
+
+func NewKeyDecoder() *KeyDecoder {
+	return &KeyDecoder{}
+}
 
 // Метод Decode для декодирования строки в id и mtype с использованием strings.Split
 func (d *KeyDecoder) Decode(key string) (id string, mtype string, ok bool) {

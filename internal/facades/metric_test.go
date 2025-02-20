@@ -63,11 +63,14 @@ func TestSuccessfulMetricSend(t *testing.T) {
 
 	facade := NewMetricFacade(client, config, testLogger)
 
-	metrics := []*domain.Metric{
-		{ID: "metric1", Value: "100"},
+	// Создаем метрику
+	metric := &domain.Metric{
+		ID:    "metric1",
+		Value: "100",
 	}
 
-	facade.UpdateMetrics(metrics)
+	// Обновляем метрику
+	facade.UpdateMetric(metric)
 
 	// Проверяем, что лог содержит сообщение об успешной отправке
 	found := false
@@ -98,11 +101,14 @@ func TestErrorLogging(t *testing.T) {
 
 	facade := NewMetricFacade(client, config, testLogger)
 
-	metrics := []*domain.Metric{
-		{ID: "metric1", Value: "100"},
+	// Создаем метрику
+	metric := &domain.Metric{
+		ID:    "metric1",
+		Value: "100",
 	}
 
-	facade.UpdateMetrics(metrics)
+	// Обновляем метрику
+	facade.UpdateMetric(metric)
 
 	// Проверяем, что лог содержит сообщение об ошибке
 	found := false
@@ -128,11 +134,14 @@ func TestServerUnavailable(t *testing.T) {
 	client := resty.New()
 	facade := NewMetricFacade(client, config, testLogger)
 
-	metrics := []*domain.Metric{
-		{ID: "metric1", Value: "100"},
+	// Создаем метрику
+	metric := &domain.Metric{
+		ID:    "metric1",
+		Value: "100",
 	}
 
-	facade.UpdateMetrics(metrics)
+	// Обновляем метрику
+	facade.UpdateMetric(metric)
 
 	// Проверяем, что лог содержит сообщение об ошибке
 	found := false
