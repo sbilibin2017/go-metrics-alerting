@@ -2,78 +2,53 @@ package validators
 
 import (
 	"errors"
-	"go-metrics-alerting/internal/types"
-	"strconv"
+	"go-metrics-alerting/internal/domain"
+	"strings"
 )
 
-// Ошибки валидации
+const (
+	EmptyString string = ""
+)
+
+// Ошибки, связанные с валидацией
 var (
-	ErrEmptyID           = errors.New("id cannot be empty")
-	ErrInvalidMType      = errors.New("invalid metric type")
-	ErrInvalidDelta      = errors.New("counter metric must have a delta value")
-	ErrInvalidValue      = errors.New("gauge metric must have a value")
-	ErrInvalidCounterVal = errors.New("counter value must be a valid integer")
-	ErrInvalidGaugeVal   = errors.New("gauge value must be a valid float")
+	ErrValueCannotBeEmpty      = errors.New("value cannot be empty")
+	ErrInvalidMetricType       = errors.New("invalid metric type")
+	ErrDeltaRequiredForCounter = errors.New("delta is required for counter metric type")
+	ErrValueRequiredForGauge   = errors.New("value is required for gauge metric type")
 )
 
-// ValidateEmptyString валидатор для проверки пустой строки
-type ValidateEmptyString struct{}
-
-func (v *ValidateEmptyString) Validate(id string) error {
-	if id == "" {
-		return ErrEmptyID
+// ValidateEmptyString проверяет, что строка не пустая.
+func ValidateEmptyString(value string) error {
+	if strings.TrimSpace(value) == EmptyString {
+		return ErrValueCannotBeEmpty
 	}
 	return nil
 }
 
-// ValidateMType валидатор для проверки типа метрики
-type ValidateMType struct{}
+// ValidateMType проверяет, что mtype имеет допустимое значение.
+func ValidateMType(mtype string) error {
+	validTypes := []string{string(domain.Counter), string(domain.Gauge)}
+	for _, validType := range validTypes {
+		if mtype == validType {
+			return nil
+		}
+	}
+	return ErrInvalidMetricType
+}
 
-func (v *ValidateMType) Validate(mType types.MType) error {
-	if mType != types.Counter && mType != types.Gauge {
-		return ErrInvalidMType
+// ValidateDelta проверяет, что Delta указано, если тип метрики "counter".
+func ValidateDelta(mtype string, delta *int64) error {
+	if mtype == string(domain.Counter) && delta == nil {
+		return ErrDeltaRequiredForCounter
 	}
 	return nil
 }
 
-// ValidateDelta валидатор для проверки Delta для счетчиков
-type ValidateDelta struct{}
-
-func (v *ValidateDelta) Validate(mType types.MType, delta *int64) error {
-	if mType == types.Counter && delta == nil {
-		return ErrInvalidDelta
-	}
-	return nil
-}
-
-// ValidateValue валидатор для проверки Value для Gauge
-type ValidateValue struct{}
-
-func (v *ValidateValue) Validate(mType types.MType, value *float64) error {
-	if mType == types.Gauge && value == nil {
-		return ErrInvalidValue
-	}
-	return nil
-}
-
-// ValidateCounterValue валидатор для проверки значения для счетчика
-type ValidateCounterValue struct{}
-
-func (v *ValidateCounterValue) Validate(value string) error {
-	_, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return ErrInvalidCounterVal
-	}
-	return nil
-}
-
-// ValidateGaugeValue валидатор для проверки значения для Gauge
-type ValidateGaugeValue struct{}
-
-func (v *ValidateGaugeValue) Validate(value string) error {
-	_, err := strconv.ParseFloat(value, 64)
-	if err != nil {
-		return ErrInvalidGaugeVal
+// ValidateValue проверяет, что Value указано, если тип метрики "gauge".
+func ValidateValue(mtype string, value *float64) error {
+	if mtype == string(domain.Gauge) && value == nil {
+		return ErrValueRequiredForGauge
 	}
 	return nil
 }
