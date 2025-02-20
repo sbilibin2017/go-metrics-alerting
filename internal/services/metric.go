@@ -1,224 +1,91 @@
 package services
 
 import (
-	"go-metrics-alerting/internal/logger"
-	"go-metrics-alerting/internal/types"
-	"net/http"
+	"errors"
+	"go-metrics-alerting/internal/domain"
 )
 
-// Validator interface defines the contract for all validators
-type IDValidator interface {
-	Validate(id string) error
+// Ошибка для неудачного обновления метрики
+var ErrUpdateFailed = errors.New("failed to update metric")
+
+// UpdateMetricStrategy интерфейс для стратегии обновления метрики
+type UpdateMetricStrategy interface {
+	Update(metric *domain.Metric) (*domain.Metric, bool)
 }
 
-// MTypeValidator interface for validating metric types
-type MTypeValidator interface {
-	Validate(mType types.MType) error
-}
-
-// DeltaValidator interface for validating delta values
-type DeltaValidator interface {
-	Validate(mType types.MType, delta *int64) error
-}
-
-// ValueValidator interface for validating value of gauges
-type ValueValidator interface {
-	Validate(mType types.MType, value *float64) error
-}
-
-// CounterValueValidator interface for validating counter values
-type CounterValueValidator interface {
-	Validate(value string) error
-}
-
-// GaugeValueValidator interface for validating gauge values
-type GaugeValueValidator interface {
-	Validate(value string) error
-}
-
-// Int64ParserFormatter interface defines methods for parsing and formatting int64
-type Int64Formatter interface {
-	Parse(value string) (int64, error)
-	Format(value int64) string
-}
-
-// Float64ParserFormatter interface defines methods for parsing and formatting float64
-type Float64Formatter interface {
-	Parse(value string) (float64, error)
-	Format(value float64) string
-}
-
-// Saver interface for the Save method
-type Saver interface {
-	Save(key, value string) bool
-}
-
-// Getter interface for the Get method
-type Getter interface {
-	Get(key string) (string, bool)
-}
-
-// Ranger interface for the Range method
-type Ranger interface {
-	Range(callback func(key, value string) bool)
-}
-
-// Обновленный UpdateMetricsService
+// UpdateMetricsService структура для обработки обновлений метрик
 type UpdateMetricsService struct {
-	Saver            Saver
-	Getter           Getter
-	IDValidator      IDValidator
-	MTypeValidator   MTypeValidator
-	DeltaValidator   DeltaValidator
-	ValueValidator   ValueValidator
-	Int64Formatter   Int64Formatter
-	Float64Formatter Float64Formatter
+	strategy UpdateMetricStrategy
 }
 
-func NewUpdateMetricsService(
-	Saver Saver,
-	Getter Getter,
-	IDValidator IDValidator,
-	MTypeValidator MTypeValidator,
-	DeltaValidator DeltaValidator,
-	ValueValidator ValueValidator,
-	Int64Formatter Int64Formatter,
-	Float64Formatter Float64Formatter,
-) *UpdateMetricsService {
-	logger.Logger.Info("UpdateMetricsService initialized")
-	return &UpdateMetricsService{
-		Saver:            Saver,
-		Getter:           Getter,
-		IDValidator:      IDValidator,
-		MTypeValidator:   MTypeValidator,
-		DeltaValidator:   DeltaValidator,
-		ValueValidator:   ValueValidator,
-		Int64Formatter:   Int64Formatter,
-		Float64Formatter: Float64Formatter,
+// UpdateMetricValue обновляет значение метрики, используя стратегию
+func (s *UpdateMetricsService) UpdateMetricValue(metric *domain.Metric) (*domain.Metric, error) {
+	updatedMetric, ok := s.strategy.Update(metric)
+	if !ok {
+		return nil, ErrUpdateFailed
 	}
+	return updatedMetric, nil
 }
 
-func (s *UpdateMetricsService) UpdateMetricValue(req *types.UpdateMetricsRequest) (*types.UpdateMetricsResponse, *types.APIErrorResponse) {
-	// Валидация входных данных
-	if err := s.IDValidator.Validate(req.ID); err != nil {
-		return nil, &types.APIErrorResponse{
-			Status:  http.StatusNotFound, // 404 Not Found - ID не найден
-			Message: "Metric with the given ID not found",
-		}
-	}
-	if err := s.MTypeValidator.Validate(req.MType); err != nil {
-		return nil, &types.APIErrorResponse{
-			Status:  http.StatusBadRequest, // 400 Bad Request
-			Message: "Invalid metric type",
-		}
-	}
-	if err := s.DeltaValidator.Validate(req.MType, req.Delta); err != nil {
-		return nil, &types.APIErrorResponse{
-			Status:  http.StatusBadRequest, // 400 Bad Request
-			Message: "Invalid delta value",
-		}
-	}
-	if err := s.ValueValidator.Validate(req.MType, req.Value); err != nil {
-		return nil, &types.APIErrorResponse{
-			Status:  http.StatusBadRequest, // 400 Bad Request
-			Message: "Invalid value",
-		}
-	}
+// Ошибка для случая, когда метрика не найдена
+var ErrMetricNotFound = errors.New("metric not found")
 
-	switch req.MType {
-	case types.Gauge:
-		s.Saver.Save(req.ID, s.Float64Formatter.Format(*req.Value))
-	case types.Counter:
-		existingValue := int64(0)
-		if existingValueStr, exists := s.Getter.Get(req.ID); exists {
-			existingValue, _ = s.Int64Formatter.Parse(existingValueStr)
-		}
-		*req.Delta += existingValue
-		s.Saver.Save(req.ID, s.Int64Formatter.Format(*req.Delta))
-	}
-
-	return &types.UpdateMetricsResponse{UpdateMetricsRequest: *req}, nil
+// MetricGetter интерфейс для получения метрик.
+type Getter interface {
+	Get(id string) (string, bool)
 }
 
-func (s *UpdateMetricsService) ParseMetricValues(mtype, valueStr string) (*float64, *int64, *types.APIErrorResponse) {
-	var value *float64
-	var delta *int64
-
-	// Преобразуем параметры в нужные типы
-	if mtype == string(types.Counter) {
-		parsedValue, err := s.Int64Formatter.Parse(valueStr)
-		if err != nil {
-			return nil, nil, &types.APIErrorResponse{
-				Status:  http.StatusBadRequest,
-				Message: "Invalid value format for Counter",
-			}
-		}
-		delta = &parsedValue
-	} else if mtype == string(types.Gauge) {
-		parsedValue, err := s.Float64Formatter.Parse(valueStr)
-		if err != nil {
-			return nil, nil, &types.APIErrorResponse{
-				Status:  http.StatusBadRequest,
-				Message: "Invalid value format for Gauge",
-			}
-		}
-		value = &parsedValue
-	}
-	return value, delta, nil
+type KeyEncoder interface {
+	Encode(id string, mtype string) string
 }
 
-// Сервис получения метрики по ID
+// Сервис для получения значения метрики по ID
 type GetMetricValueService struct {
-	Getter         Getter
-	IDValidator    IDValidator
-	MTypeValidator MTypeValidator
+	getter  Getter
+	encoder KeyEncoder
 }
 
-func NewGetMetricValueService(getter Getter, emptyValidator IDValidator, mtypeValidator MTypeValidator) *GetMetricValueService {
-	return &GetMetricValueService{
-		Getter:         getter,
-		IDValidator:    emptyValidator,
-		MTypeValidator: mtypeValidator,
+// Метод для получения значения метрики
+func (s *GetMetricValueService) GetMetricValue(id string, mType domain.MType) (*domain.Metric, error) {
+	if valueStr, exists := s.getter.Get(s.encoder.Encode(id, string(mType))); exists {
+		return &domain.Metric{
+			ID:    id,
+			MType: mType,
+			Value: valueStr,
+		}, nil
 	}
+	return nil, ErrMetricNotFound
 }
 
-func (s *GetMetricValueService) GetMetricValue(req *types.GetMetricValueRequest) (*types.GetMetricValueResponse, *types.APIErrorResponse) {
-	if err := s.IDValidator.Validate(req.ID); err != nil {
-		return nil, &types.APIErrorResponse{
-			Status:  http.StatusNotFound, // 404 Not Found - ID не найден
-			Message: "Metric with the given ID not found",
-		}
-	}
-	if err := s.MTypeValidator.Validate(req.MType); err != nil {
-		return nil, &types.APIErrorResponse{
-			Status:  http.StatusBadRequest, // 400 Bad Request
-			Message: "Invalid metric type",
-		}
-	}
-
-	if valueStr, exists := s.Getter.Get(req.ID); exists {
-		return &types.GetMetricValueResponse{ID: req.ID, Value: valueStr}, nil
-	}
-	return nil, &types.APIErrorResponse{
-		Status:  http.StatusNotFound, // 404 Not Found - метрика не найдена
-		Message: "Metric not found",
-	}
+// MetricGetter интерфейс для получения метрик.
+type Ranger interface {
+	Range(callback func(id, value string) bool)
+}
+type KeyDecoder interface {
+	Decode(key string) (id string, mtype string, ok bool)
 }
 
-// Сервис получения всех метрик
+// Сервис для получения всех метрик
 type GetAllMetricValuesService struct {
-	ranger Ranger
+	ranger  Ranger
+	decoder KeyDecoder
 }
 
-func NewGetAllMetricValuesService(ranger Ranger) *GetAllMetricValuesService {
-	return &GetAllMetricValuesService{ranger: ranger}
-}
+// Метод для получения всех метрик
+func (s *GetAllMetricValuesService) GetAllMetricValues() []*domain.Metric {
+	var metrics []*domain.Metric
+	s.ranger.Range(func(id, value string) bool {
+		id, mType, ok := s.decoder.Decode(id)
+		if !ok {
+			return true
+		}
+		metrics = append(metrics, &domain.Metric{
+			ID:    id,
+			MType: domain.MType(mType),
+			Value: value,
+		})
 
-func (s *GetAllMetricValuesService) GetAllMetricValues() ([]*types.GetMetricValueResponse, *types.APIErrorResponse) {
-	var metrics []*types.GetMetricValueResponse
-	s.ranger.Range(func(key, value string) bool {
-		metrics = append(metrics, &types.GetMetricValueResponse{ID: key, Value: value})
 		return true
 	})
-	return metrics, nil
+	return metrics
 }
