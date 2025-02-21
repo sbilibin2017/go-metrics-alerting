@@ -27,10 +27,10 @@ func NewSaver(storage *Storage) *Saver {
 	return &Saver{storage: storage}
 }
 
-func (s *Saver) Save(key string, value types.Metrics) bool {
+func (s *Saver) Save(key string, value *types.Metrics) bool {
 	s.storage.mu.Lock()
 	defer s.storage.mu.Unlock()
-	s.storage.data[key] = &value
+	s.storage.data[key] = value
 	return true
 }
 
@@ -43,11 +43,10 @@ func NewGetter(storage *Storage) *Getter {
 	return &Getter{storage: storage}
 }
 
-func (g *Getter) Get(key string) (*types.Metrics, bool) {
+func (g *Getter) Get(key string) *types.Metrics {
 	g.storage.mu.RLock()
 	defer g.storage.mu.RUnlock()
-	value, exists := g.storage.data[key]
-	return value, exists
+	return g.storage.data[key]
 }
 
 // Ranger управляет операцией перебора элементов в хранилище.
