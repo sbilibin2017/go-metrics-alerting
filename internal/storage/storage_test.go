@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"go-metrics-alerting/internal/types"
+	"go-metrics-alerting/internal/domain"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,9 +12,9 @@ func TestSaver_Save(t *testing.T) {
 	storage := NewStorage()
 	saver := NewSaver(storage)
 
-	metric := &types.Metrics{
+	metric := &domain.Metrics{
 		ID:    "metric1",
-		MType: types.Gauge,
+		MType: domain.Gauge,
 		Value: new(float64),
 	}
 	*metric.Value = 10.5
@@ -26,7 +26,7 @@ func TestSaver_Save(t *testing.T) {
 	storedMetric := storage.data["key1"]
 	assert.NotNil(t, storedMetric)
 	assert.Equal(t, "metric1", storedMetric.ID)
-	assert.Equal(t, types.Gauge, storedMetric.MType)
+	assert.Equal(t, domain.Gauge, storedMetric.MType)
 	assert.Equal(t, 10.5, *storedMetric.Value)
 }
 
@@ -36,9 +36,9 @@ func TestGetter_Get(t *testing.T) {
 	saver := NewSaver(storage)
 	getter := NewGetter(storage)
 
-	metric := &types.Metrics{
+	metric := &domain.Metrics{
 		ID:    "metric2",
-		MType: types.Counter,
+		MType: domain.Counter,
 		Delta: new(int64),
 	}
 	*metric.Delta = 20
@@ -52,7 +52,7 @@ func TestGetter_Get(t *testing.T) {
 	// Проверяем, что метрика существует и данные правильные
 	assert.NotNil(t, storedMetric)
 	assert.Equal(t, "metric2", storedMetric.ID)
-	assert.Equal(t, types.Counter, storedMetric.MType)
+	assert.Equal(t, domain.Counter, storedMetric.MType)
 	assert.Equal(t, int64(20), *storedMetric.Delta)
 	assert.Nil(t, storedMetric.Value)
 }
@@ -64,17 +64,17 @@ func TestRanger_Range(t *testing.T) {
 	ranger := NewRanger(storage)
 
 	// Сохраняем несколько метрик
-	metric1 := &types.Metrics{
+	metric1 := &domain.Metrics{
 		ID:    "metric1",
-		MType: types.Gauge,
+		MType: domain.Gauge,
 		Value: new(float64),
 	}
 	*metric1.Value = 10.5
 	saver.Save("key1", metric1)
 
-	metric2 := &types.Metrics{
+	metric2 := &domain.Metrics{
 		ID:    "metric2",
-		MType: types.Counter,
+		MType: domain.Counter,
 		Delta: new(int64),
 	}
 	*metric2.Delta = 20
@@ -82,10 +82,10 @@ func TestRanger_Range(t *testing.T) {
 
 	// Переменные для проверки правильности данных
 	var keys []string
-	var values []*types.Metrics
+	var values []*domain.Metrics
 
 	// Перебор метрик с использованием callback
-	ranger.Range(func(key string, value *types.Metrics) bool {
+	ranger.Range(func(key string, value *domain.Metrics) bool {
 		keys = append(keys, key)
 		values = append(values, value)
 		return true // Прерывание не требуется
@@ -107,17 +107,17 @@ func TestRanger_Range_BreakCallback(t *testing.T) {
 	ranger := NewRanger(storage)
 
 	// Сохраняем несколько метрик
-	metric1 := &types.Metrics{
+	metric1 := &domain.Metrics{
 		ID:    "metric1",
-		MType: types.Gauge,
+		MType: domain.Gauge,
 		Value: new(float64),
 	}
 	*metric1.Value = 10.5
 	saver.Save("key1", metric1)
 
-	metric2 := &types.Metrics{
+	metric2 := &domain.Metrics{
 		ID:    "metric2",
-		MType: types.Counter,
+		MType: domain.Counter,
 		Delta: new(int64),
 	}
 	*metric2.Delta = 20
@@ -125,11 +125,11 @@ func TestRanger_Range_BreakCallback(t *testing.T) {
 
 	// Переменные для проверки правильности данных
 	var keys []string
-	var values []*types.Metrics
+	var values []*domain.Metrics
 	var calledBeforeBreak bool
 
 	// Перебор метрик с использованием callback с прерыванием
-	ranger.Range(func(key string, value *types.Metrics) bool {
+	ranger.Range(func(key string, value *domain.Metrics) bool {
 		keys = append(keys, key)
 		values = append(values, value)
 
@@ -149,7 +149,7 @@ func TestRanger_Range_BreakCallback(t *testing.T) {
 	// Проверяем, что добавлен только первый элемент
 	assert.Equal(t, "key1", keys[0])
 	assert.Equal(t, "metric1", values[0].ID)
-	assert.Equal(t, types.Gauge, values[0].MType)
+	assert.Equal(t, domain.Gauge, values[0].MType)
 	assert.Equal(t, 10.5, *values[0].Value)
 	assert.Nil(t, values[0].Delta)
 }
