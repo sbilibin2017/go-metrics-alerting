@@ -27,11 +27,10 @@ func NewSaver(storage *Storage) *Saver {
 	return &Saver{storage: storage}
 }
 
-func (s *Saver) Save(key string, value *types.Metrics) bool {
+func (s *Saver) Save(key string, value *types.Metrics) {
 	s.storage.mu.Lock()
 	defer s.storage.mu.Unlock()
 	s.storage.data[key] = value
-	return true
 }
 
 // Getter управляет операцией чтения из хранилища.
