@@ -9,12 +9,13 @@ import (
 )
 
 // Mocks
-type MockSaver struct {
+type MockUpdateMetricStrategy struct {
 	mock.Mock
 }
 
-func (m *MockSaver) Save(key string, value *domain.Metrics) {
-	m.Called(key, value)
+func (m *MockUpdateMetricStrategy) Update(metric *domain.Metrics) *domain.Metrics {
+	args := m.Called(metric)
+	return args.Get(0).(*domain.Metrics)
 }
 
 type MockGetter struct {
@@ -43,149 +44,57 @@ func (m *MockRanger) Range(callback func(key string, value *domain.Metrics) bool
 	m.Called(callback)
 }
 
-func TestUpdateCounterMetricService_Update_NewMetric(t *testing.T) {
-	mockSaver := new(MockSaver)
-	mockGetter := new(MockGetter)
-	mockEncoder := new(MockKeyEncoder)
-
-	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
-	delta := int64(5)
-	metric := &domain.Metrics{ID: "1", MType: domain.Counter, Delta: &delta}
-
-	mockEncoder.On("Encode", "1", "counter").Return("counter_1")
-	mockGetter.On("Get", "counter_1").Return((*domain.Metrics)(nil)) // Возвращаем nil как типизированное значение
-	mockSaver.On("Save", "counter_1", metric).Return()
-
-	result := counterService.Update(metric)
-
-	assert.NotNil(t, result)
-	assert.Equal(t, metric, result)
-	mockEncoder.AssertExpectations(t)
-	mockGetter.AssertExpectations(t)
-	mockSaver.AssertExpectations(t)
-}
-
-func TestUpdateCounterMetricService_Update_ExistingMetric(t *testing.T) {
-	mockSaver := new(MockSaver)
-	mockGetter := new(MockGetter)
-	mockEncoder := new(MockKeyEncoder)
-
-	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
-	initialDelta := int64(5)
-	existingMetric := &domain.Metrics{ID: "1", MType: domain.Counter, Delta: &initialDelta}
-	delta := int64(10)
-	metric := &domain.Metrics{ID: "1", MType: domain.Counter, Delta: &delta}
-
-	mockEncoder.On("Encode", "1", "counter").Return("counter_1")
-	mockGetter.On("Get", "counter_1").Return(existingMetric)
-	mockSaver.On("Save", "counter_1", existingMetric).Return()
-
-	result := counterService.Update(metric)
-
-	assert.NotNil(t, result)
-	assert.Equal(t, existingMetric, result)
-	assert.Equal(t, int64(15), *existingMetric.Delta) // проверяем, что delta обновился
-	mockEncoder.AssertExpectations(t)
-	mockGetter.AssertExpectations(t)
-	mockSaver.AssertExpectations(t)
-}
-
-func TestUpdateGaugeMetricService_Update_ExistingMetric(t *testing.T) {
-	mockSaver := new(MockSaver)
-	mockGetter := new(MockGetter)
-	mockEncoder := new(MockKeyEncoder)
-
-	gaugeService := NewUpdateGaugeMetricService(mockSaver, mockGetter, mockEncoder)
-
-	// Исходная метрика в хранилище
-	initialValue := 5.0
-	existingMetric := &domain.Metrics{
-		ID:    "1",
-		MType: domain.Gauge,
-		Value: &initialValue,
-	}
-
-	// Новая метрика для обновления
-	newValue := 10.0
-	metric := &domain.Metrics{
-		ID:    "1",
-		MType: domain.Gauge,
-		Value: &newValue,
-	}
-
-	// Мокируем поведение
-	mockEncoder.On("Encode", "1", "gauge").Return("gauge_1")
-	mockGetter.On("Get", "gauge_1").Return(existingMetric)   // Возвращаем уже существующую метрику
-	mockSaver.On("Save", "gauge_1", existingMetric).Return() // Сохраняем обновленную метрику
-
-	// Обновляем метрику
-	result := gaugeService.Update(metric)
-
-	// Проверяем результат
-	assert.NotNil(t, result)
-	assert.Equal(t, existingMetric, result)          // Убедитесь, что результат совпадает с обновленной метрикой
-	assert.Equal(t, newValue, *existingMetric.Value) // Проверяем, что значение метрики обновилось
-
-	// Проверяем ожидания
-	mockEncoder.AssertExpectations(t)
-	mockGetter.AssertExpectations(t)
-	mockSaver.AssertExpectations(t)
-}
-
 func TestUpdateMetricService_Update_GaugeMetric(t *testing.T) {
-	mockSaver := new(MockSaver)
-	mockGetter := new(MockGetter)
-	mockEncoder := new(MockKeyEncoder)
-
-	gaugeService := NewUpdateGaugeMetricService(mockSaver, mockGetter, mockEncoder)
-	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
-	updateService := NewUpdateMetricService(gaugeService, counterService)
+	mockGaugeStrategy := new(MockUpdateMetricStrategy)
+	mockCounterStrategy := new(MockUpdateMetricStrategy)
+	updateService := NewUpdateMetricService(mockGaugeStrategy, mockCounterStrategy)
 
 	v := 10.0
 	metric := &domain.Metrics{ID: "1", MType: domain.Gauge, Value: &v}
 
-	mockEncoder.On("Encode", "1", "gauge").Return("gauge_1")
-	mockGetter.On("Get", "gauge_1").Return((*domain.Metrics)(nil)) // Возвращаем nil как типизированное значение
-	mockSaver.On("Save", "gauge_1", metric).Return()
+	mockGaugeStrategy.On("Update", metric).Return(metric)
 
 	result := updateService.UpdateMetric(metric)
 
 	assert.NotNil(t, result)
 	assert.Equal(t, metric, result)
-	mockEncoder.AssertExpectations(t)
-	mockGetter.AssertExpectations(t)
-	mockSaver.AssertExpectations(t)
+	mockGaugeStrategy.AssertExpectations(t)
 }
 
 func TestUpdateMetricService_Update_CounterMetric(t *testing.T) {
-	mockSaver := new(MockSaver)
-	mockGetter := new(MockGetter)
-	mockEncoder := new(MockKeyEncoder)
-
-	gaugeService := NewUpdateGaugeMetricService(mockSaver, mockGetter, mockEncoder)
-	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
-	updateService := NewUpdateMetricService(gaugeService, counterService)
+	mockGaugeStrategy := new(MockUpdateMetricStrategy)
+	mockCounterStrategy := new(MockUpdateMetricStrategy)
+	updateService := NewUpdateMetricService(mockGaugeStrategy, mockCounterStrategy)
 
 	delta := int64(5)
 	metric := &domain.Metrics{ID: "1", MType: domain.Counter, Delta: &delta}
 
-	mockEncoder.On("Encode", "1", "counter").Return("counter_1")
-	mockGetter.On("Get", "counter_1").Return((*domain.Metrics)(nil)) // Возвращаем nil как типизированное значение
-	mockSaver.On("Save", "counter_1", metric).Return()
+	mockCounterStrategy.On("Update", metric).Return(metric)
 
 	result := updateService.UpdateMetric(metric)
 
 	assert.NotNil(t, result)
 	assert.Equal(t, metric, result)
-	mockEncoder.AssertExpectations(t)
-	mockGetter.AssertExpectations(t)
-	mockSaver.AssertExpectations(t)
+	mockCounterStrategy.AssertExpectations(t)
+}
+
+func TestUpdateMetricService_Update_InvalidMetric(t *testing.T) {
+	mockGaugeStrategy := new(MockUpdateMetricStrategy)
+	mockCounterStrategy := new(MockUpdateMetricStrategy)
+	updateService := NewUpdateMetricService(mockGaugeStrategy, mockCounterStrategy)
+
+	invalidMetric := &domain.Metrics{ID: "1", MType: "InvalidType"}
+
+	result := updateService.UpdateMetric(invalidMetric)
+
+	assert.Nil(t, result)
+	mockGaugeStrategy.AssertNotCalled(t, "Update")
+	mockCounterStrategy.AssertNotCalled(t, "Update")
 }
 
 func TestGetMetricService_Get(t *testing.T) {
 	mockGetter := new(MockGetter)
 	mockEncoder := new(MockKeyEncoder)
-
 	getMetricService := NewGetMetricService(mockGetter, mockEncoder)
 
 	metric := &domain.Metrics{ID: "1", MType: domain.Gauge, Value: nil}
@@ -203,7 +112,6 @@ func TestGetMetricService_Get(t *testing.T) {
 
 func TestGetAllMetricsService_GetAll(t *testing.T) {
 	mockRanger := new(MockRanger)
-
 	getAllService := NewGetAllMetricsService(mockRanger)
 
 	metric1 := &domain.Metrics{ID: "1", MType: domain.Gauge, Value: nil}
@@ -222,34 +130,4 @@ func TestGetAllMetricsService_GetAll(t *testing.T) {
 	assert.Contains(t, result, metric1)
 	assert.Contains(t, result, metric2)
 	mockRanger.AssertExpectations(t)
-}
-
-func TestUpdateMetricService_Update_Default(t *testing.T) {
-	// Моки для UpdateGaugeMetricService и UpdateCounterMetricService
-	mockSaver := new(MockSaver)
-	mockGetter := new(MockGetter)
-	mockEncoder := new(MockKeyEncoder)
-
-	gaugeService := NewUpdateGaugeMetricService(mockSaver, mockGetter, mockEncoder)
-	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
-
-	// Новый фасадный сервис для метрик
-	updateService := NewUpdateMetricService(gaugeService, counterService)
-
-	// Метрика с неподдерживаемым типом
-	invalidMetric := &domain.Metrics{
-		ID:    "1",
-		MType: "InvalidType", // Указан неподдерживаемый тип
-	}
-
-	// Вызываем метод Update для неподдерживаемого типа
-	result := updateService.UpdateMetric(invalidMetric)
-
-	// Проверяем, что результат равен nil
-	assert.Nil(t, result)
-
-	// Проверяем, что методы сохранения и получения не были вызваны
-	mockSaver.AssertNotCalled(t, "Save")
-	mockGetter.AssertNotCalled(t, "Get")
-	mockEncoder.AssertNotCalled(t, "Encode")
 }

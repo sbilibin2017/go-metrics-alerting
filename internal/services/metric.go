@@ -9,79 +9,19 @@ type Saver interface {
 	Save(key string, value *domain.Metrics)
 }
 
-// Getter определяет методы для получения данных из хранилища.
-type Getter interface {
-	Get(key string) *domain.Metrics
-}
-
-// Ranger управляет операцией перебора элементов в хранилище.
-type Ranger interface {
-	Range(callback func(key string, value *domain.Metrics) bool)
-}
-
 // KeyEncoder интерфейс для кодирования ключей.
-type KeyEncoder interface {
-	Encode(id, mtype string) string
-}
-
-// UpdateGaugeMetricService для обновления метрик типа gauge
-type UpdateGaugeMetricService struct {
-	saver      Saver
-	getter     Getter
-	keyEncoder KeyEncoder
-}
-
-// NewUpdateGaugeMetricService создаёт новый сервис для работы с gauge метриками
-func NewUpdateGaugeMetricService(saver Saver, getter Getter, keyEncoder KeyEncoder) *UpdateGaugeMetricService {
-	return &UpdateGaugeMetricService{saver: saver, getter: getter, keyEncoder: keyEncoder}
-}
-
-// Update обновляет значение метрики типа gauge (замещает старое значение)
-func (s *UpdateGaugeMetricService) Update(metric *domain.Metrics) *domain.Metrics {
-	key := s.keyEncoder.Encode(metric.ID, string(metric.MType))
-	existingMetric := s.getter.Get(key)
-	if existingMetric == nil {
-		s.saver.Save(key, metric)
-		return metric
-	}
-	existingMetric.Value = metric.Value
-	s.saver.Save(key, existingMetric)
-	return existingMetric
-}
-
-// UpdateCounterMetricService для обновления метрик типа counter
-type UpdateCounterMetricService struct {
-	saver      Saver
-	getter     Getter
-	keyEncoder KeyEncoder
-}
-
-// NewUpdateCounterMetricService создаёт новый сервис для работы с counter метриками
-func NewUpdateCounterMetricService(saver Saver, getter Getter, keyEncoder KeyEncoder) *UpdateCounterMetricService {
-	return &UpdateCounterMetricService{saver: saver, getter: getter, keyEncoder: keyEncoder}
-}
-
-// Update обновляет значение метрики типа counter (прибавляет к текущему значению)
-func (s *UpdateCounterMetricService) Update(metric *domain.Metrics) *domain.Metrics {
-	key := s.keyEncoder.Encode(metric.ID, string(metric.MType))
-	existingMetric := s.getter.Get(key)
-	if existingMetric == nil {
-		s.saver.Save(key, metric)
-		return metric
-	}
-	*existingMetric.Delta += *metric.Delta
-	s.saver.Save(key, existingMetric)
-	return existingMetric
+type UpdateMetricStrategy interface {
+	Update(metric *domain.Metrics) *domain.Metrics
 }
 
 // UpdateMetricService фасад для двух сервисов
 type UpdateMetricService struct {
-	gaugeService   *UpdateGaugeMetricService
-	counterService *UpdateCounterMetricService
+	gaugeService   UpdateMetricStrategy
+	counterService UpdateMetricStrategy
 }
 
 // NewUpdateMetricService создаёт новый фасадный сервис для работы с метриками
-func NewUpdateMetricService(gaugeService *UpdateGaugeMetricService, counterService *UpdateCounterMetricService) *UpdateMetricService {
+func NewUpdateMetricService(gaugeService UpdateMetricStrategy, counterService UpdateMetricStrategy) *UpdateMetricService {
 	return &UpdateMetricService{gaugeService: gaugeService, counterService: counterService}
 }
 
@@ -95,6 +35,16 @@ func (s *UpdateMetricService) UpdateMetric(metric *domain.Metrics) *domain.Metri
 	default:
 		return nil
 	}
+}
+
+// Getter определяет методы для получения данных из хранилища.
+type Getter interface {
+	Get(key string) *domain.Metrics
+}
+
+// KeyEncoder интерфейс для кодирования ключей.
+type KeyEncoder interface {
+	Encode(id, mtype string) string
 }
 
 // GetMetricService для получения одной метрики по её ID
@@ -112,6 +62,11 @@ func NewGetMetricService(getter Getter, keyEncoder KeyEncoder) *GetMetricService
 func (s *GetMetricService) Get(id string, mtype domain.MType) *domain.Metrics {
 	key := s.keyEncoder.Encode(id, string(mtype))
 	return s.getter.Get(key)
+}
+
+// Ranger управляет операцией перебора элементов в хранилище.
+type Ranger interface {
+	Range(callback func(key string, value *domain.Metrics) bool)
 }
 
 // GetAllMetricsService для получения всех метрик с использованием Ranger
