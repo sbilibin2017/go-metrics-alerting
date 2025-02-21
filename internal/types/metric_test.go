@@ -178,82 +178,15 @@ func TestUpdateMetricPathRequest_Validate(t *testing.T) {
 	}
 }
 
-func TestGetMetricBodyRequest_Validate(t *testing.T) {
-	tests := []struct {
-		name     string
-		request  GetMetricBodyRequest
-		expected int
-	}{
-		{
-			name: "valid gauge request",
-			request: GetMetricBodyRequest{
-				ID:    "metric1",
-				MType: "gauge",
-			},
-			expected: http.StatusOK,
-		},
-		{
-			name: "valid counter request",
-			request: GetMetricBodyRequest{
-				ID:    "metric2",
-				MType: "counter",
-			},
-			expected: http.StatusOK,
-		},
-		{
-			name: "missing ID",
-			request: GetMetricBodyRequest{
-				MType: "gauge",
-			},
-			expected: http.StatusNotFound,
-		},
-		{
-			name: "invalid metric type",
-			request: GetMetricBodyRequest{
-				ID:    "metric3",
-				MType: "invalid",
-			},
-			expected: http.StatusBadRequest,
-		},
-		{
-			name: "empty ID",
-			request: GetMetricBodyRequest{
-				ID:    "",
-				MType: "gauge",
-			},
-			expected: http.StatusNotFound,
-		},
-		{
-			name: "empty metric type",
-			request: GetMetricBodyRequest{
-				ID:    "metric4",
-				MType: "",
-			},
-			expected: http.StatusBadRequest,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.request.Validate()
-			if err != nil {
-				assert.Equal(t, tt.expected, err.Status)
-			} else {
-				assert.Equal(t, tt.expected, http.StatusOK)
-			}
-		})
-	}
-}
-
 func TestGetMetricPathRequest_Validate(t *testing.T) {
 	tests := []struct {
 		name     string
-		request  GetMetricPathRequest
+		request  GetMetricRequest
 		expected int
 	}{
 		{
 			name: "valid gauge request",
-			request: GetMetricPathRequest{
+			request: GetMetricRequest{
 				ID:    "metric1",
 				MType: "gauge",
 			},
@@ -261,7 +194,7 @@ func TestGetMetricPathRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "valid counter request",
-			request: GetMetricPathRequest{
+			request: GetMetricRequest{
 				ID:    "metric2",
 				MType: "counter",
 			},
@@ -269,14 +202,14 @@ func TestGetMetricPathRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "missing ID",
-			request: GetMetricPathRequest{
+			request: GetMetricRequest{
 				MType: "gauge",
 			},
 			expected: http.StatusNotFound,
 		},
 		{
 			name: "invalid metric type",
-			request: GetMetricPathRequest{
+			request: GetMetricRequest{
 				ID:    "metric3",
 				MType: "invalid",
 			},
@@ -284,7 +217,7 @@ func TestGetMetricPathRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "empty ID",
-			request: GetMetricPathRequest{
+			request: GetMetricRequest{
 				ID:    "",
 				MType: "gauge",
 			},
@@ -292,7 +225,7 @@ func TestGetMetricPathRequest_Validate(t *testing.T) {
 		},
 		{
 			name: "empty metric type",
-			request: GetMetricPathRequest{
+			request: GetMetricRequest{
 				ID:    "metric4",
 				MType: "",
 			},

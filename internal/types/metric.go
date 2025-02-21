@@ -94,30 +94,13 @@ func (r *UpdateMetricPathRequest) Validate() *APIError {
 }
 
 // GetMetricBodyRequest является структурой для получения метрики через тело запроса.
-type GetMetricBodyRequest struct {
+type GetMetricRequest struct {
 	ID    string `json:"id"`   // имя метрики
 	MType string `json:"type"` // параметр, принимающий значение gauge или counter
 }
 
 // Метод для валидации GetMetricBodyRequest
-func (r *GetMetricBodyRequest) Validate() *APIError {
-	if err := validators.ValidateString(r.ID); err != nil {
-		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
-	}
-	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
-		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
-	}
-	return nil
-}
-
-// GetMetricPathRequest является структурой для получения метрики через путь запроса.
-type GetMetricPathRequest struct {
-	ID    string `json:"id"`   // имя метрики
-	MType string `json:"type"` // параметр, принимающий значение gauge или counter
-}
-
-// Метод для валидации GetMetricPathRequest
-func (r *GetMetricPathRequest) Validate() *APIError {
+func (r *GetMetricRequest) Validate() *APIError {
 	if err := validators.ValidateString(r.ID); err != nil {
 		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
 	}
