@@ -1,22 +1,22 @@
 package services
 
 import (
-	"go-metrics-alerting/internal/types"
+	"go-metrics-alerting/internal/domain"
 )
 
 // Saver определяет методы для сохранения данных в хранилище.
 type Saver interface {
-	Save(key string, value *types.Metrics)
+	Save(key string, value *domain.Metrics)
 }
 
 // Getter определяет методы для получения данных из хранилища.
 type Getter interface {
-	Get(key string) *types.Metrics
+	Get(key string) *domain.Metrics
 }
 
 // Ranger управляет операцией перебора элементов в хранилище.
 type Ranger interface {
-	Range(callback func(key string, value *types.Metrics) bool)
+	Range(callback func(key string, value *domain.Metrics) bool)
 }
 
 // KeyEncoder интерфейс для кодирования ключей.
@@ -37,7 +37,7 @@ func NewUpdateGaugeMetricService(saver Saver, getter Getter, keyEncoder KeyEncod
 }
 
 // Update обновляет значение метрики типа gauge (замещает старое значение)
-func (s *UpdateGaugeMetricService) Update(metric *types.Metrics) *types.Metrics {
+func (s *UpdateGaugeMetricService) Update(metric *domain.Metrics) *domain.Metrics {
 	key := s.keyEncoder.Encode(metric.ID, string(metric.MType))
 	existingMetric := s.getter.Get(key)
 	if existingMetric == nil {
@@ -62,7 +62,7 @@ func NewUpdateCounterMetricService(saver Saver, getter Getter, keyEncoder KeyEnc
 }
 
 // Update обновляет значение метрики типа counter (прибавляет к текущему значению)
-func (s *UpdateCounterMetricService) Update(metric *types.Metrics) *types.Metrics {
+func (s *UpdateCounterMetricService) Update(metric *domain.Metrics) *domain.Metrics {
 	key := s.keyEncoder.Encode(metric.ID, string(metric.MType))
 	existingMetric := s.getter.Get(key)
 	if existingMetric == nil {
@@ -86,11 +86,11 @@ func NewUpdateMetricService(gaugeService *UpdateGaugeMetricService, counterServi
 }
 
 // Update обновляет значение метрики в зависимости от её типа
-func (s *UpdateMetricService) Update(metric *types.Metrics) *types.Metrics {
+func (s *UpdateMetricService) UpdateMetric(metric *domain.Metrics) *domain.Metrics {
 	switch metric.MType {
-	case types.Counter:
+	case domain.Counter:
 		return s.counterService.Update(metric)
-	case types.Gauge:
+	case domain.Gauge:
 		return s.gaugeService.Update(metric)
 	default:
 		return nil
@@ -109,7 +109,7 @@ func NewGetMetricService(getter Getter, keyEncoder KeyEncoder) *GetMetricService
 }
 
 // Get возвращает метрику по её ID
-func (s *GetMetricService) Get(id string, mtype types.MType) *types.Metrics {
+func (s *GetMetricService) Get(id string, mtype domain.MType) *domain.Metrics {
 	key := s.keyEncoder.Encode(id, string(mtype))
 	return s.getter.Get(key)
 }
@@ -125,9 +125,9 @@ func NewGetAllMetricsService(ranger Ranger) *GetAllMetricsService {
 }
 
 // GetAll перебирает все метрики и возвращает их как срез.
-func (s *GetAllMetricsService) GetAll() []*types.Metrics {
-	var result []*types.Metrics
-	s.ranger.Range(func(key string, value *types.Metrics) bool {
+func (s *GetAllMetricsService) GetAll() []*domain.Metrics {
+	var result []*domain.Metrics
+	s.ranger.Range(func(key string, value *domain.Metrics) bool {
 		result = append(result, value)
 		return true
 	})
