@@ -1,144 +1,255 @@
-package services_test
+package services
 
 import (
-	"go-metrics-alerting/internal/services"
 	"go-metrics-alerting/internal/types"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-// Моки для Saver и Getter
-type mockSaver struct {
-	store map[string]*types.Metrics
+// Mocks
+type MockSaver struct {
+	mock.Mock
 }
 
-func (m *mockSaver) Save(key string, value *types.Metrics) bool {
-	m.store[key] = value
-	return true
+func (m *MockSaver) Save(key string, value *types.Metrics) {
+	m.Called(key, value)
 }
 
-type mockGetter struct {
-	store map[string]*types.Metrics
+type MockGetter struct {
+	mock.Mock
 }
 
-func (m *mockGetter) Get(key string) (*types.Metrics, bool) {
-	metric, exists := m.store[key]
-	return metric, exists
+func (m *MockGetter) Get(key string) *types.Metrics {
+	args := m.Called(key)
+	return args.Get(0).(*types.Metrics)
 }
 
-func TestUpdateGaugeMetricService(t *testing.T) {
-	saver := &mockSaver{store: make(map[string]*types.Metrics)}
-	getter := &mockGetter{store: saver.store}
-	service := services.NewUpdateGaugeMetricService(saver, getter)
-
-	value := 42.5
-	metric := &types.Metrics{ID: "gauge1", MType: types.Gauge, Value: &value}
-	updatedMetric, ok := service.Update(metric)
-
-	// Use testify assertions
-	assert.True(t, ok, "Expected successful update")
-	assert.NotNil(t, updatedMetric.Value, "Expected value to be set")
-	assert.Equal(t, value, *updatedMetric.Value, "Expected value to match")
+type MockKeyEncoder struct {
+	mock.Mock
 }
 
-func TestUpdateCounterMetricService(t *testing.T) {
-	saver := &mockSaver{store: make(map[string]*types.Metrics)}
-	getter := &mockGetter{store: saver.store}
-	service := services.NewUpdateCounterMetricService(saver, getter)
-
-	value := int64(10)
-	metric := &types.Metrics{ID: "counter1", MType: types.Counter, Delta: &value}
-	updatedMetric, ok := service.Update(metric)
-
-	// Use testify assertions
-	assert.True(t, ok, "Expected successful update")
-	assert.NotNil(t, updatedMetric.Delta, "Expected delta to be set")
-	assert.Equal(t, value, *updatedMetric.Delta, "Expected delta to match")
-
-	// Проверка накопления значения
-	newValue := int64(5)
-	metric2 := &types.Metrics{ID: "counter1", MType: types.Counter, Delta: &newValue}
-	updatedMetric, _ = service.Update(metric2)
-
-	expectedSum := int64(15)
-	assert.Equal(t, expectedSum, *updatedMetric.Delta, "Expected accumulated delta to match")
+func (m *MockKeyEncoder) Encode(id, mtype string) string {
+	args := m.Called(id, mtype)
+	return args.String(0)
 }
 
-func TestUpdateMetricService(t *testing.T) {
-	saver := &mockSaver{store: make(map[string]*types.Metrics)}
-	getter := &mockGetter{store: saver.store}
-	gaugeService := services.NewUpdateGaugeMetricService(saver, getter)
-	counterService := services.NewUpdateCounterMetricService(saver, getter)
-	service := services.NewUpdateMetricService(gaugeService, counterService)
-
-	// Тест gauge
-	gaugeValue := 55.5
-	gaugeMetric := &types.Metrics{ID: "gauge2", MType: types.Gauge, Value: &gaugeValue}
-	updatedGauge, ok := service.Update(gaugeMetric)
-
-	// Use testify assertions
-	assert.True(t, ok, "Expected successful update")
-	assert.NotNil(t, updatedGauge.Value, "Expected value to be set for gauge")
-	assert.Equal(t, gaugeValue, *updatedGauge.Value, "Expected gauge value to match")
-
-	// Тест counter
-	counterValue := int64(20)
-	counterMetric := &types.Metrics{ID: "counter2", MType: types.Counter, Delta: &counterValue}
-	updatedCounter, ok := service.Update(counterMetric)
-
-	// Use testify assertions
-	assert.True(t, ok, "Expected successful update")
-	assert.NotNil(t, updatedCounter.Delta, "Expected delta to be set for counter")
-	assert.Equal(t, counterValue, *updatedCounter.Delta, "Expected counter delta to match")
+type MockRanger struct {
+	mock.Mock
 }
 
-func TestUpdateExistingGaugeMetric(t *testing.T) {
-	saver := &mockSaver{store: make(map[string]*types.Metrics)}
-	getter := &mockGetter{store: saver.store}
-	service := services.NewUpdateGaugeMetricService(saver, getter)
-
-	// Setup an existing metric
-	existingValue := 42.5
-	existingMetric := &types.Metrics{ID: "gauge1", MType: types.Gauge, Value: &existingValue}
-	saver.Save(existingMetric.ID, existingMetric) // Save the initial metric
-
-	// New metric with the same ID, but different value
-	newValue := 55.5
-	metric := &types.Metrics{ID: "gauge1", MType: types.Gauge, Value: &newValue}
-
-	// Perform the update
-	updatedMetric, ok := service.Update(metric)
-
-	// Use testify assertions
-	assert.True(t, ok, "Expected successful update")
-	assert.NotNil(t, updatedMetric.Value, "Expected value to be set")
-	assert.Equal(t, newValue, *updatedMetric.Value, "Expected updated value to match")
-
-	// Verify that the existing metric was updated correctly
-	storedMetric, exists := saver.store[existingMetric.ID]
-	assert.True(t, exists, "Expected the metric to be saved in the store")
-	assert.Equal(t, newValue, *storedMetric.Value, "Expected stored metric value to match updated value")
+func (m *MockRanger) Range(callback func(key string, value *types.Metrics) bool) {
+	m.Called(callback)
 }
 
-func TestUpdateInvalidMetricType(t *testing.T) {
-	saver := &mockSaver{store: make(map[string]*types.Metrics)}
-	getter := &mockGetter{store: saver.store}
-	service := services.NewUpdateMetricService(
-		services.NewUpdateGaugeMetricService(saver, getter),
-		services.NewUpdateCounterMetricService(saver, getter),
-	)
+func TestUpdateCounterMetricService_Update_NewMetric(t *testing.T) {
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
+	mockEncoder := new(MockKeyEncoder)
 
-	// Creating a metric with an unsupported type (assuming there is no handler for this type)
-	invalidMetric := &types.Metrics{
-		ID:    "invalid1",
-		MType: "unsupported_type", // Assuming this type is not handled by your services
+	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
+	delta := int64(5)
+	metric := &types.Metrics{ID: "1", MType: types.Counter, Delta: &delta}
+
+	mockEncoder.On("Encode", "1", "counter").Return("counter_1")
+	mockGetter.On("Get", "counter_1").Return((*types.Metrics)(nil)) // Возвращаем nil как типизированное значение
+	mockSaver.On("Save", "counter_1", metric).Return()
+
+	result := counterService.Update(metric)
+
+	assert.NotNil(t, result)
+	assert.Equal(t, metric, result)
+	mockEncoder.AssertExpectations(t)
+	mockGetter.AssertExpectations(t)
+	mockSaver.AssertExpectations(t)
+}
+
+func TestUpdateCounterMetricService_Update_ExistingMetric(t *testing.T) {
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
+	mockEncoder := new(MockKeyEncoder)
+
+	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
+	initialDelta := int64(5)
+	existingMetric := &types.Metrics{ID: "1", MType: types.Counter, Delta: &initialDelta}
+	delta := int64(10)
+	metric := &types.Metrics{ID: "1", MType: types.Counter, Delta: &delta}
+
+	mockEncoder.On("Encode", "1", "counter").Return("counter_1")
+	mockGetter.On("Get", "counter_1").Return(existingMetric)
+	mockSaver.On("Save", "counter_1", existingMetric).Return()
+
+	result := counterService.Update(metric)
+
+	assert.NotNil(t, result)
+	assert.Equal(t, existingMetric, result)
+	assert.Equal(t, int64(15), *existingMetric.Delta) // проверяем, что delta обновился
+	mockEncoder.AssertExpectations(t)
+	mockGetter.AssertExpectations(t)
+	mockSaver.AssertExpectations(t)
+}
+
+func TestUpdateGaugeMetricService_Update_ExistingMetric(t *testing.T) {
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
+	mockEncoder := new(MockKeyEncoder)
+
+	gaugeService := NewUpdateGaugeMetricService(mockSaver, mockGetter, mockEncoder)
+
+	// Исходная метрика в хранилище
+	initialValue := 5.0
+	existingMetric := &types.Metrics{
+		ID:    "1",
+		MType: types.Gauge,
+		Value: &initialValue,
 	}
 
-	// Perform the update (this should trigger the default case and return nil, false)
-	updatedMetric, ok := service.Update(invalidMetric)
+	// Новая метрика для обновления
+	newValue := 10.0
+	metric := &types.Metrics{
+		ID:    "1",
+		MType: types.Gauge,
+		Value: &newValue,
+	}
 
-	// Use testify assertions
-	assert.False(t, ok, "Expected update to fail for unsupported metric type")
-	assert.Nil(t, updatedMetric, "Expected returned metric to be nil for unsupported metric type")
+	// Мокируем поведение
+	mockEncoder.On("Encode", "1", "gauge").Return("gauge_1")
+	mockGetter.On("Get", "gauge_1").Return(existingMetric)   // Возвращаем уже существующую метрику
+	mockSaver.On("Save", "gauge_1", existingMetric).Return() // Сохраняем обновленную метрику
+
+	// Обновляем метрику
+	result := gaugeService.Update(metric)
+
+	// Проверяем результат
+	assert.NotNil(t, result)
+	assert.Equal(t, existingMetric, result)          // Убедитесь, что результат совпадает с обновленной метрикой
+	assert.Equal(t, newValue, *existingMetric.Value) // Проверяем, что значение метрики обновилось
+
+	// Проверяем ожидания
+	mockEncoder.AssertExpectations(t)
+	mockGetter.AssertExpectations(t)
+	mockSaver.AssertExpectations(t)
+}
+
+func TestUpdateMetricService_Update_GaugeMetric(t *testing.T) {
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
+	mockEncoder := new(MockKeyEncoder)
+
+	gaugeService := NewUpdateGaugeMetricService(mockSaver, mockGetter, mockEncoder)
+	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
+	updateService := NewUpdateMetricService(gaugeService, counterService)
+
+	v := 10.0
+	metric := &types.Metrics{ID: "1", MType: types.Gauge, Value: &v}
+
+	mockEncoder.On("Encode", "1", "gauge").Return("gauge_1")
+	mockGetter.On("Get", "gauge_1").Return((*types.Metrics)(nil)) // Возвращаем nil как типизированное значение
+	mockSaver.On("Save", "gauge_1", metric).Return()
+
+	result := updateService.Update(metric)
+
+	assert.NotNil(t, result)
+	assert.Equal(t, metric, result)
+	mockEncoder.AssertExpectations(t)
+	mockGetter.AssertExpectations(t)
+	mockSaver.AssertExpectations(t)
+}
+
+func TestUpdateMetricService_Update_CounterMetric(t *testing.T) {
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
+	mockEncoder := new(MockKeyEncoder)
+
+	gaugeService := NewUpdateGaugeMetricService(mockSaver, mockGetter, mockEncoder)
+	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
+	updateService := NewUpdateMetricService(gaugeService, counterService)
+
+	delta := int64(5)
+	metric := &types.Metrics{ID: "1", MType: types.Counter, Delta: &delta}
+
+	mockEncoder.On("Encode", "1", "counter").Return("counter_1")
+	mockGetter.On("Get", "counter_1").Return((*types.Metrics)(nil)) // Возвращаем nil как типизированное значение
+	mockSaver.On("Save", "counter_1", metric).Return()
+
+	result := updateService.Update(metric)
+
+	assert.NotNil(t, result)
+	assert.Equal(t, metric, result)
+	mockEncoder.AssertExpectations(t)
+	mockGetter.AssertExpectations(t)
+	mockSaver.AssertExpectations(t)
+}
+
+func TestGetMetricService_Get(t *testing.T) {
+	mockGetter := new(MockGetter)
+	mockEncoder := new(MockKeyEncoder)
+
+	getMetricService := NewGetMetricService(mockGetter, mockEncoder)
+
+	metric := &types.Metrics{ID: "1", MType: types.Gauge, Value: nil}
+
+	mockEncoder.On("Encode", "1", "gauge").Return("gauge_1")
+	mockGetter.On("Get", "gauge_1").Return(metric)
+
+	result := getMetricService.Get("1", types.Gauge)
+
+	assert.NotNil(t, result)
+	assert.Equal(t, metric, result)
+	mockEncoder.AssertExpectations(t)
+	mockGetter.AssertExpectations(t)
+}
+
+func TestGetAllMetricsService_GetAll(t *testing.T) {
+	mockRanger := new(MockRanger)
+
+	getAllService := NewGetAllMetricsService(mockRanger)
+
+	metric1 := &types.Metrics{ID: "1", MType: types.Gauge, Value: nil}
+	metric2 := &types.Metrics{ID: "2", MType: types.Counter, Value: nil}
+
+	mockRanger.On("Range", mock.Anything).Run(func(args mock.Arguments) {
+		callback := args.Get(0).(func(string, *types.Metrics) bool)
+		callback("gauge_1", metric1)
+		callback("counter_2", metric2)
+	}).Return()
+
+	result := getAllService.GetAll()
+
+	assert.NotNil(t, result)
+	assert.Len(t, result, 2)
+	assert.Contains(t, result, metric1)
+	assert.Contains(t, result, metric2)
+	mockRanger.AssertExpectations(t)
+}
+
+func TestUpdateMetricService_Update_Default(t *testing.T) {
+	// Моки для UpdateGaugeMetricService и UpdateCounterMetricService
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
+	mockEncoder := new(MockKeyEncoder)
+
+	gaugeService := NewUpdateGaugeMetricService(mockSaver, mockGetter, mockEncoder)
+	counterService := NewUpdateCounterMetricService(mockSaver, mockGetter, mockEncoder)
+
+	// Новый фасадный сервис для метрик
+	updateService := NewUpdateMetricService(gaugeService, counterService)
+
+	// Метрика с неподдерживаемым типом
+	invalidMetric := &types.Metrics{
+		ID:    "1",
+		MType: "InvalidType", // Указан неподдерживаемый тип
+	}
+
+	// Вызываем метод Update для неподдерживаемого типа
+	result := updateService.Update(invalidMetric)
+
+	// Проверяем, что результат равен nil
+	assert.Nil(t, result)
+
+	// Проверяем, что методы сохранения и получения не были вызваны
+	mockSaver.AssertNotCalled(t, "Save")
+	mockGetter.AssertNotCalled(t, "Get")
+	mockEncoder.AssertNotCalled(t, "Encode")
 }
