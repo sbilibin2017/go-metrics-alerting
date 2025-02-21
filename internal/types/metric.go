@@ -2,30 +2,9 @@ package types
 
 import (
 	"go-metrics-alerting/internal/domain"
+	"go-metrics-alerting/internal/validators" // Импортируем пакет с функциями валидации
 	"strconv"
 )
-
-// Интерфейсы для валидации
-
-type StringValidator interface {
-	Validate(s string) error
-}
-
-type MetricTypeValidator interface {
-	Validate(mType domain.MType) error
-}
-
-type DeltaValidator interface {
-	Validate(mType domain.MType, delta *int64) error
-}
-
-type ValueValidator interface {
-	Validate(mType domain.MType, value *float64) error
-}
-
-type ValueStringValidator interface {
-	Validate(value string) error
-}
 
 // UpdateMetricBodyRequest является структурой для обновления метрики через тело запроса.
 type UpdateMetricBodyRequest struct {
@@ -46,26 +25,21 @@ func (r *UpdateMetricBodyRequest) ToDomain() *domain.Metrics {
 }
 
 // Метод для валидации UpdateMetricBodyRequest
-func (r *UpdateMetricBodyRequest) Validate(
-	stringValidator StringValidator,
-	metricTypeValidator MetricTypeValidator,
-	deltaValidator DeltaValidator,
-	valueValidator ValueValidator,
-) error {
-	if err := stringValidator.Validate(r.ID); err != nil {
+func (r *UpdateMetricBodyRequest) Validate() error {
+	if err := validators.ValidateString(r.ID); err != nil {
 		return err
 	}
 	mType := domain.MType(r.MType)
-	if err := metricTypeValidator.Validate(mType); err != nil {
+	if err := validators.ValidateMType(mType); err != nil {
 		return err
 	}
 	switch mType {
 	case domain.Counter:
-		if err := deltaValidator.Validate(mType, r.Delta); err != nil {
+		if err := validators.ValidateDelta(mType, r.Delta); err != nil {
 			return err
 		}
 	case domain.Gauge:
-		if err := valueValidator.Validate(mType, r.Value); err != nil {
+		if err := validators.ValidateValue(mType, r.Value); err != nil {
 			return err
 		}
 	}
@@ -105,19 +79,14 @@ func (r *UpdateMetricPathRequest) ToDomain() *domain.Metrics {
 }
 
 // Метод для валидации UpdateMetricPathRequest
-func (r *UpdateMetricPathRequest) Validate(
-	stringValidator StringValidator,
-	metricTypeValidator MetricTypeValidator,
-	valueStringValidator ValueStringValidator,
-) error {
-	if err := stringValidator.Validate(r.ID); err != nil {
+func (r *UpdateMetricPathRequest) Validate() error {
+	if err := validators.ValidateString(r.ID); err != nil {
 		return err
 	}
-	mType := domain.MType(r.MType)
-	if err := metricTypeValidator.Validate(mType); err != nil {
+	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
 		return err
 	}
-	if err := valueStringValidator.Validate(r.Value); err != nil {
+	if err := validators.ValidateValueString(domain.MType(r.MType), r.Value); err != nil {
 		return err
 	}
 	return nil
@@ -130,15 +99,11 @@ type GetMetricBodyRequest struct {
 }
 
 // Метод для валидации GetMetricBodyRequest
-func (r *GetMetricBodyRequest) Validate(
-	stringValidator StringValidator,
-	metricTypeValidator MetricTypeValidator,
-) error {
-	if err := stringValidator.Validate(r.ID); err != nil {
+func (r *GetMetricBodyRequest) Validate() error {
+	if err := validators.ValidateString(r.ID); err != nil {
 		return err
 	}
-	mType := domain.MType(r.MType)
-	if err := metricTypeValidator.Validate(mType); err != nil {
+	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
 		return err
 	}
 	return nil
@@ -151,15 +116,11 @@ type GetMetricPathRequest struct {
 }
 
 // Метод для валидации GetMetricPathRequest
-func (r *GetMetricPathRequest) Validate(
-	stringValidator StringValidator,
-	metricTypeValidator MetricTypeValidator,
-) error {
-	if err := stringValidator.Validate(r.ID); err != nil {
+func (r *GetMetricPathRequest) Validate() error {
+	if err := validators.ValidateString(r.ID); err != nil {
 		return err
 	}
-	mType := domain.MType(r.MType)
-	if err := metricTypeValidator.Validate(mType); err != nil {
+	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
 		return err
 	}
 	return nil
