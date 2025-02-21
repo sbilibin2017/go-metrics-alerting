@@ -10,7 +10,7 @@ import (
 )
 
 // Интерфейс для коллекционера метрик
-type MetricsCollector interface {
+type MetricsCollectorStrategy interface {
 	Collect() []*domain.Metrics
 }
 
@@ -19,28 +19,28 @@ type MetricFacade interface {
 	UpdateMetric(metric *domain.Metrics)
 }
 
-// MetricAgent структура агента для сбора и отправки метрик
+// MetricAgentService структура агента для сбора и отправки метрик
 type MetricAgentService struct {
-	config     *configs.AgentConfig
-	collectors []MetricsCollector
-	facade     MetricFacade
-	metricsCh  chan *domain.Metrics
-	logger     *zap.Logger
+	config              *configs.AgentConfig
+	collectorStrategies map[domain.MType]MetricsCollectorStrategy
+	facade              MetricFacade
+	metricsCh           chan *domain.Metrics
+	logger              *zap.Logger
 }
 
-// NewMetricAgent создает новый экземпляр MetricAgent с логгером
+// NewMetricAgentService создает новый экземпляр MetricAgentService с логгером
 func NewMetricAgentService(
 	config *configs.AgentConfig,
-	collectors []MetricsCollector,
+	collectorStrategies map[domain.MType]MetricsCollectorStrategy,
 	facade MetricFacade,
 	logger *zap.Logger,
 ) *MetricAgentService {
 	return &MetricAgentService{
-		config:     config,
-		collectors: collectors,
-		facade:     facade,
-		metricsCh:  make(chan *domain.Metrics, 100),
-		logger:     logger,
+		config:              config,
+		collectorStrategies: collectorStrategies,
+		facade:              facade,
+		metricsCh:           make(chan *domain.Metrics, 100),
+		logger:              logger,
 	}
 }
 
@@ -70,7 +70,8 @@ func (a *MetricAgentService) Run(signalCh chan os.Signal) {
 
 // collectMetrics собирает метрики с использованием коллекционеров
 func (a *MetricAgentService) collectMetrics() {
-	for _, collector := range a.collectors {
+	for strategy, collector := range a.collectorStrategies {
+		a.logger.Debug("Collecting metric", zap.String("strategy", string(strategy)))
 		metrics := collector.Collect()
 		for _, metric := range metrics {
 			a.metricsCh <- metric

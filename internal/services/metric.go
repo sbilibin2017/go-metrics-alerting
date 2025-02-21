@@ -16,25 +16,21 @@ type UpdateMetricStrategy interface {
 
 // UpdateMetricService фасад для двух сервисов
 type UpdateMetricService struct {
-	gaugeService   UpdateMetricStrategy
-	counterService UpdateMetricStrategy
+	updateStrategies map[domain.MType]UpdateMetricStrategy
 }
 
 // NewUpdateMetricService создаёт новый фасадный сервис для работы с метриками
-func NewUpdateMetricService(gaugeService UpdateMetricStrategy, counterService UpdateMetricStrategy) *UpdateMetricService {
-	return &UpdateMetricService{gaugeService: gaugeService, counterService: counterService}
+func NewUpdateMetricService(updateStrategies map[domain.MType]UpdateMetricStrategy) *UpdateMetricService {
+	return &UpdateMetricService{updateStrategies: updateStrategies}
 }
 
 // Update обновляет значение метрики в зависимости от её типа
 func (s *UpdateMetricService) UpdateMetric(metric *domain.Metrics) *domain.Metrics {
-	switch metric.MType {
-	case domain.Counter:
-		return s.counterService.Update(metric)
-	case domain.Gauge:
-		return s.gaugeService.Update(metric)
-	default:
+	strategy, exists := s.updateStrategies[metric.MType]
+	if !exists {
 		return nil
 	}
+	return strategy.Update(metric)
 }
 
 // Getter определяет методы для получения данных из хранилища.

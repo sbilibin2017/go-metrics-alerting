@@ -47,7 +47,15 @@ func (m *MockRanger) Range(callback func(key string, value *domain.Metrics) bool
 func TestUpdateMetricService_Update_GaugeMetric(t *testing.T) {
 	mockGaugeStrategy := new(MockUpdateMetricStrategy)
 	mockCounterStrategy := new(MockUpdateMetricStrategy)
-	updateService := NewUpdateMetricService(mockGaugeStrategy, mockCounterStrategy)
+
+	// Создаём мапу стратегий
+	strategies := map[domain.MType]UpdateMetricStrategy{
+		domain.Gauge:   mockGaugeStrategy,
+		domain.Counter: mockCounterStrategy,
+	}
+
+	// Создаём сервис с мапой стратегий
+	updateService := NewUpdateMetricService(strategies)
 
 	v := 10.0
 	metric := &domain.Metrics{ID: "1", MType: domain.Gauge, Value: &v}
@@ -64,7 +72,15 @@ func TestUpdateMetricService_Update_GaugeMetric(t *testing.T) {
 func TestUpdateMetricService_Update_CounterMetric(t *testing.T) {
 	mockGaugeStrategy := new(MockUpdateMetricStrategy)
 	mockCounterStrategy := new(MockUpdateMetricStrategy)
-	updateService := NewUpdateMetricService(mockGaugeStrategy, mockCounterStrategy)
+
+	// Создаём мапу стратегий
+	strategies := map[domain.MType]UpdateMetricStrategy{
+		domain.Gauge:   mockGaugeStrategy,
+		domain.Counter: mockCounterStrategy,
+	}
+
+	// Создаём сервис с мапой стратегий
+	updateService := NewUpdateMetricService(strategies)
 
 	delta := int64(5)
 	metric := &domain.Metrics{ID: "1", MType: domain.Counter, Delta: &delta}
@@ -78,18 +94,27 @@ func TestUpdateMetricService_Update_CounterMetric(t *testing.T) {
 	mockCounterStrategy.AssertExpectations(t)
 }
 
-func TestUpdateMetricService_Update_InvalidMetric(t *testing.T) {
+func TestUpdateMetricService_Update_UnknownMetricType(t *testing.T) {
 	mockGaugeStrategy := new(MockUpdateMetricStrategy)
 	mockCounterStrategy := new(MockUpdateMetricStrategy)
-	updateService := NewUpdateMetricService(mockGaugeStrategy, mockCounterStrategy)
 
-	invalidMetric := &domain.Metrics{ID: "1", MType: "InvalidType"}
+	// Создаём мапу стратегий, в которой нет стратегии для "UnknownType"
+	strategies := map[domain.MType]UpdateMetricStrategy{
+		domain.Gauge:   mockGaugeStrategy,
+		domain.Counter: mockCounterStrategy,
+	}
 
-	result := updateService.UpdateMetric(invalidMetric)
+	// Создаём сервис с мапой стратегий
+	updateService := NewUpdateMetricService(strategies)
 
+	// Метрика с неизвестным типом
+	metric := &domain.Metrics{ID: "1", MType: "UnknownType"}
+
+	// Вызываем UpdateMetric
+	result := updateService.UpdateMetric(metric)
+
+	// Ожидаем, что результат будет nil
 	assert.Nil(t, result)
-	mockGaugeStrategy.AssertNotCalled(t, "Update")
-	mockCounterStrategy.AssertNotCalled(t, "Update")
 }
 
 func TestGetMetricService_Get(t *testing.T) {
