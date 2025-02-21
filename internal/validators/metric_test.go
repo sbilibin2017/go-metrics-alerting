@@ -76,33 +76,24 @@ func TestValidateMType(t *testing.T) {
 func TestValidateDelta(t *testing.T) {
 	tests := []struct {
 		name     string
-		mType    domain.MType
 		delta    *int64
 		expected string
 	}{
 		{
 			name:     "valid delta for counter",
-			mType:    domain.Counter,
 			delta:    ptrInt64(10),
 			expected: "", // no error expected
 		},
 		{
 			name:     "missing delta for counter",
-			mType:    domain.Counter,
 			delta:    nil,
 			expected: "delta is required for Counter metric", // error expected
-		},
-		{
-			name:     "no delta for gauge",
-			mType:    domain.Gauge,
-			delta:    nil,
-			expected: "", // no error expected
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateDelta(tt.mType, tt.delta)
+			err := ValidateDelta(tt.delta)
 			if tt.expected == "" {
 				require.NoError(t, err) // no error expected
 			} else {
@@ -115,33 +106,24 @@ func TestValidateDelta(t *testing.T) {
 func TestValidateValue(t *testing.T) {
 	tests := []struct {
 		name     string
-		mType    domain.MType
 		value    *float64
 		expected string
 	}{
 		{
 			name:     "valid value for gauge",
-			mType:    domain.Gauge,
 			value:    ptrFloat64(10.5),
 			expected: "", // no error expected
 		},
 		{
 			name:     "missing value for gauge",
-			mType:    domain.Gauge,
 			value:    nil,
 			expected: "value is required for Gauge metric", // error expected
-		},
-		{
-			name:     "no value for counter",
-			mType:    domain.Counter,
-			value:    nil,
-			expected: "", // no error expected
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateValue(tt.mType, tt.value)
+			err := ValidateValue(tt.value)
 			if tt.expected == "" {
 				require.NoError(t, err) // no error expected
 			} else {

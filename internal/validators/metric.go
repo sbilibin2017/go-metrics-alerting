@@ -23,16 +23,16 @@ func ValidateMType(mType domain.MType) error {
 }
 
 // Функция для валидации Delta (для Counter)
-func ValidateDelta(mType domain.MType, delta *int64) error {
-	if mType == domain.Counter && delta == nil {
+func ValidateDelta(delta *int64) error {
+	if delta == nil {
 		return errors.New("delta is required for Counter metric")
 	}
 	return nil
 }
 
 // Функция для валидации Value (для Gauge)
-func ValidateValue(mType domain.MType, value *float64) error {
-	if mType == domain.Gauge && value == nil {
+func ValidateValue(value *float64) error {
+	if value == nil {
 		return errors.New("value is required for Gauge metric")
 	}
 	return nil
