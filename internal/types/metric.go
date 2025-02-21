@@ -3,6 +3,7 @@ package types
 import (
 	"go-metrics-alerting/internal/domain"
 	"go-metrics-alerting/internal/validators" // Импортируем пакет с функциями валидации
+	"net/http"
 	"strconv"
 )
 
@@ -25,22 +26,22 @@ func (r *UpdateMetricBodyRequest) ToDomain() *domain.Metrics {
 }
 
 // Метод для валидации UpdateMetricBodyRequest
-func (r *UpdateMetricBodyRequest) Validate() error {
+func (r *UpdateMetricBodyRequest) Validate() *APIError {
 	if err := validators.ValidateString(r.ID); err != nil {
-		return err
+		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
 	}
 	mType := domain.MType(r.MType)
 	if err := validators.ValidateMType(mType); err != nil {
-		return err
+		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
 	}
 	switch mType {
 	case domain.Counter:
-		if err := validators.ValidateDelta(mType, r.Delta); err != nil {
-			return err
+		if err := validators.ValidateDelta(r.Delta); err != nil {
+			return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
 		}
 	case domain.Gauge:
-		if err := validators.ValidateValue(mType, r.Value); err != nil {
-			return err
+		if err := validators.ValidateValue(r.Value); err != nil {
+			return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
 		}
 	}
 	return nil
@@ -79,15 +80,15 @@ func (r *UpdateMetricPathRequest) ToDomain() *domain.Metrics {
 }
 
 // Метод для валидации UpdateMetricPathRequest
-func (r *UpdateMetricPathRequest) Validate() error {
+func (r *UpdateMetricPathRequest) Validate() *APIError {
 	if err := validators.ValidateString(r.ID); err != nil {
-		return err
+		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
 	}
 	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
-		return err
+		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
 	}
 	if err := validators.ValidateValueString(domain.MType(r.MType), r.Value); err != nil {
-		return err
+		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
 	}
 	return nil
 }
@@ -99,12 +100,12 @@ type GetMetricBodyRequest struct {
 }
 
 // Метод для валидации GetMetricBodyRequest
-func (r *GetMetricBodyRequest) Validate() error {
+func (r *GetMetricBodyRequest) Validate() *APIError {
 	if err := validators.ValidateString(r.ID); err != nil {
-		return err
+		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
 	}
 	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
-		return err
+		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
 	}
 	return nil
 }
@@ -116,12 +117,12 @@ type GetMetricPathRequest struct {
 }
 
 // Метод для валидации GetMetricPathRequest
-func (r *GetMetricPathRequest) Validate() error {
+func (r *GetMetricPathRequest) Validate() *APIError {
 	if err := validators.ValidateString(r.ID); err != nil {
-		return err
+		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
 	}
 	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
-		return err
+		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
 	}
 	return nil
 }

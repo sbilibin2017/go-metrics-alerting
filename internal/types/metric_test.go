@@ -2,194 +2,104 @@ package types
 
 import (
 	"go-metrics-alerting/internal/domain"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestUpdateMetricBodyRequest_ToDomain(t *testing.T) {
-	tests := []struct {
-		name    string
-		request UpdateMetricBodyRequest
-		want    *domain.Metrics
-	}{
-		{
-			name: "valid gauge metric",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric1",
-				MType: "gauge",
-				Value: ptrFloat64(10.5),
-			},
-			want: &domain.Metrics{
-				ID:    "metric1",
-				MType: domain.Gauge,
-				Value: ptrFloat64(10.5),
-			},
-		},
-		{
-			name: "valid counter metric",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric2",
-				MType: "counter",
-				Delta: ptrInt64(5),
-			},
-			want: &domain.Metrics{
-				ID:    "metric2",
-				MType: domain.Counter,
-				Delta: ptrInt64(5),
-			},
-		},
-		{
-			name: "missing value for gauge",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric3",
-				MType: "gauge",
-				Value: nil,
-			},
-			want: &domain.Metrics{
-				ID:    "metric3",
-				MType: domain.Gauge,
-				Value: nil,
-			},
-		},
-		{
-			name: "missing delta for counter",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric4",
-				MType: "counter",
-				Delta: nil,
-			},
-			want: &domain.Metrics{
-				ID:    "metric4",
-				MType: domain.Counter,
-				Delta: nil,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.request.ToDomain()
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
 
 func TestUpdateMetricBodyRequest_Validate(t *testing.T) {
 	tests := []struct {
-		name    string
-		request UpdateMetricBodyRequest
-		wantErr bool
+		name     string
+		request  UpdateMetricBodyRequest
+		expected int
 	}{
 		{
-			name: "valid request with gauge type",
+			name: "valid counter request",
 			request: UpdateMetricBodyRequest{
 				ID:    "metric1",
-				MType: "gauge",
-				Value: ptrFloat64(10.5),
+				MType: "counter",
+				Delta: ptrInt64(10),
 			},
-			wantErr: false,
+			expected: http.StatusOK,
 		},
 		{
-			name: "valid request with counter type",
+			name: "valid gauge request",
 			request: UpdateMetricBodyRequest{
 				ID:    "metric2",
-				MType: "counter",
-				Delta: ptrInt64(5),
+				MType: "gauge",
+				Value: ptrFloat64(5.5),
 			},
-			wantErr: false,
+			expected: http.StatusOK,
 		},
 		{
 			name: "missing ID",
 			request: UpdateMetricBodyRequest{
-				ID:    "",
 				MType: "gauge",
-				Value: ptrFloat64(10.5),
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid metric type",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric3",
-				MType: "invalidType",
-				Value: ptrFloat64(10.5),
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing value for gauge",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric4",
-				MType: "gauge",
-				Value: nil,
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing delta for counter",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric5",
-				MType: "counter",
-				Delta: nil,
-			},
-			wantErr: true,
-		},
-		{
-			name: "valid gauge metric",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric1",
-				MType: "gauge",
-				Value: ptrFloat64(10.5),
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid counter metric",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric2",
-				MType: "counter",
-				Delta: ptrInt64(5),
-			},
-			wantErr: false,
-		},
-		{
-			name: "missing value for gauge",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric3",
-				MType: "gauge",
-				Value: nil,
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing delta for counter",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric4",
-				MType: "counter",
-				Delta: nil,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid metric type",
-			request: UpdateMetricBodyRequest{
-				ID:    "metric5",
-				MType: "unknown",
 				Value: ptrFloat64(5.5),
 			},
-			wantErr: true,
+			expected: http.StatusNotFound,
+		},
+		{
+			name: "invalid metric type",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric1",
+				MType: "invalid",
+			},
+			expected: http.StatusBadRequest,
+		},
+		{
+			name: "missing delta for counter",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric3",
+				MType: "counter",
+			},
+			expected: http.StatusBadRequest,
+		},
+		{
+			name: "missing value for gauge",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric4",
+				MType: "gauge",
+			},
+			expected: http.StatusBadRequest,
+		},
+		{
+			name: "empty ID",
+			request: UpdateMetricBodyRequest{
+				ID:    "",
+				MType: "gauge",
+				Value: ptrFloat64(1.1),
+			},
+			expected: http.StatusNotFound,
+		},
+		{
+			name: "zero delta for counter",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric5",
+				MType: "counter",
+				Delta: ptrInt64(0),
+			},
+			expected: http.StatusOK,
+		},
+		{
+			name: "zero value for gauge",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric6",
+				MType: "gauge",
+				Value: ptrFloat64(0.0),
+			},
+			expected: http.StatusOK,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.request.Validate()
-			if tt.wantErr {
-				assert.Error(t, err)
+			if err != nil {
+				assert.Equal(t, tt.expected, err.Status)
 			} else {
-				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, http.StatusOK)
 			}
 		})
 	}
@@ -199,72 +109,293 @@ func TestUpdateMetricPathRequest_Validate(t *testing.T) {
 	tests := []struct {
 		name     string
 		request  UpdateMetricPathRequest
-		expected string
+		expected int
 	}{
 		{
-			name: "valid request with gauge type and valid value",
+			name: "valid counter request",
 			request: UpdateMetricPathRequest{
 				ID:    "metric1",
-				MType: "gauge",
-				Value: "10.5", // valid float value for gauge
+				MType: "counter",
+				Value: "10",
 			},
-			expected: "", // no error expected
+			expected: http.StatusOK,
 		},
 		{
-			name: "valid request with counter type and valid value",
+			name: "valid gauge request",
 			request: UpdateMetricPathRequest{
 				ID:    "metric2",
-				MType: "counter",
-				Value: "5", // valid integer value for counter
-			},
-			expected: "", // no error expected
-		},
-		{
-			name: "invalid value for gauge type (non-numeric)",
-			request: UpdateMetricPathRequest{
-				ID:    "metric3",
 				MType: "gauge",
-				Value: "invalidValue", // invalid float value for gauge
+				Value: "42.42",
 			},
-			expected: "invalid value for Gauge metric, must be a valid float", // expect specific error
+			expected: http.StatusOK,
 		},
 		{
-			name: "invalid value for counter type (non-numeric)",
+			name: "missing ID",
 			request: UpdateMetricPathRequest{
-				ID:    "metric4",
-				MType: "counter",
-				Value: "invalidValue", // invalid integer value for counter
+				MType: "gauge",
+				Value: "5.5",
 			},
-			expected: "invalid value for Counter metric, must be a valid integer", // expect specific error
+			expected: http.StatusNotFound,
 		},
 		{
 			name: "invalid metric type",
 			request: UpdateMetricPathRequest{
-				ID:    "metric5",
-				MType: "unknown", // invalid metric type
-				Value: "10",      // any valid value
+				ID:    "metric3",
+				MType: "invalid",
+				Value: "100",
 			},
-			expected: "invalid metric type", // expect specific error
+			expected: http.StatusBadRequest,
 		},
 		{
-			name: "empty ID",
+			name: "invalid counter value (non-numeric)",
 			request: UpdateMetricPathRequest{
-				ID:    "",      // empty ID
-				MType: "gauge", // valid metric type
-				Value: "10.5",  // valid value for gauge
+				ID:    "metric4",
+				MType: "counter",
+				Value: "invalid",
 			},
-			expected: "id is required", // expect specific error
+			expected: http.StatusBadRequest,
+		},
+		{
+			name: "invalid gauge value (non-numeric)",
+			request: UpdateMetricPathRequest{
+				ID:    "metric5",
+				MType: "gauge",
+				Value: "invalid",
+			},
+			expected: http.StatusBadRequest,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.request.Validate()
-			if tt.expected == "" {
-				require.NoError(t, err) // no error expected
+			if err != nil {
+				assert.Equal(t, tt.expected, err.Status)
 			} else {
-				assert.EqualError(t, err, tt.expected) // check if the error matches the expected one
+				assert.Equal(t, tt.expected, http.StatusOK)
 			}
+		})
+	}
+}
+
+func TestGetMetricBodyRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name     string
+		request  GetMetricBodyRequest
+		expected int
+	}{
+		{
+			name: "valid gauge request",
+			request: GetMetricBodyRequest{
+				ID:    "metric1",
+				MType: "gauge",
+			},
+			expected: http.StatusOK,
+		},
+		{
+			name: "valid counter request",
+			request: GetMetricBodyRequest{
+				ID:    "metric2",
+				MType: "counter",
+			},
+			expected: http.StatusOK,
+		},
+		{
+			name: "missing ID",
+			request: GetMetricBodyRequest{
+				MType: "gauge",
+			},
+			expected: http.StatusNotFound,
+		},
+		{
+			name: "invalid metric type",
+			request: GetMetricBodyRequest{
+				ID:    "metric3",
+				MType: "invalid",
+			},
+			expected: http.StatusBadRequest,
+		},
+		{
+			name: "empty ID",
+			request: GetMetricBodyRequest{
+				ID:    "",
+				MType: "gauge",
+			},
+			expected: http.StatusNotFound,
+		},
+		{
+			name: "empty metric type",
+			request: GetMetricBodyRequest{
+				ID:    "metric4",
+				MType: "",
+			},
+			expected: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.request.Validate()
+			if err != nil {
+				assert.Equal(t, tt.expected, err.Status)
+			} else {
+				assert.Equal(t, tt.expected, http.StatusOK)
+			}
+		})
+	}
+}
+
+func TestGetMetricPathRequest_Validate(t *testing.T) {
+	tests := []struct {
+		name     string
+		request  GetMetricPathRequest
+		expected int
+	}{
+		{
+			name: "valid gauge request",
+			request: GetMetricPathRequest{
+				ID:    "metric1",
+				MType: "gauge",
+			},
+			expected: http.StatusOK,
+		},
+		{
+			name: "valid counter request",
+			request: GetMetricPathRequest{
+				ID:    "metric2",
+				MType: "counter",
+			},
+			expected: http.StatusOK,
+		},
+		{
+			name: "missing ID",
+			request: GetMetricPathRequest{
+				MType: "gauge",
+			},
+			expected: http.StatusNotFound,
+		},
+		{
+			name: "invalid metric type",
+			request: GetMetricPathRequest{
+				ID:    "metric3",
+				MType: "invalid",
+			},
+			expected: http.StatusBadRequest,
+		},
+		{
+			name: "empty ID",
+			request: GetMetricPathRequest{
+				ID:    "",
+				MType: "gauge",
+			},
+			expected: http.StatusNotFound,
+		},
+		{
+			name: "empty metric type",
+			request: GetMetricPathRequest{
+				ID:    "metric4",
+				MType: "",
+			},
+			expected: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.request.Validate()
+			if err != nil {
+				assert.Equal(t, tt.expected, err.Status)
+			} else {
+				assert.Equal(t, tt.expected, http.StatusOK)
+			}
+		})
+	}
+}
+
+func TestUpdateMetricBodyRequest_ToDomain(t *testing.T) {
+	tests := []struct {
+		name     string
+		request  UpdateMetricBodyRequest
+		expected *domain.Metrics
+	}{
+		{
+			name: "valid counter conversion",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric1",
+				MType: "counter",
+				Delta: ptrInt64(10),
+			},
+			expected: &domain.Metrics{
+				ID:    "metric1",
+				MType: domain.Counter,
+				Delta: ptrInt64(10),
+				Value: nil,
+			},
+		},
+		{
+			name: "valid gauge conversion",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric2",
+				MType: "gauge",
+				Value: ptrFloat64(42.42),
+			},
+			expected: &domain.Metrics{
+				ID:    "metric2",
+				MType: domain.Gauge,
+				Delta: nil,
+				Value: ptrFloat64(42.42),
+			},
+		},
+		{
+			name: "valid counter with zero delta",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric3",
+				MType: "counter",
+				Delta: ptrInt64(0),
+			},
+			expected: &domain.Metrics{
+				ID:    "metric3",
+				MType: domain.Counter,
+				Delta: ptrInt64(0),
+				Value: nil,
+			},
+		},
+		{
+			name: "valid gauge with zero value",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric4",
+				MType: "gauge",
+				Value: ptrFloat64(0.0),
+			},
+			expected: &domain.Metrics{
+				ID:    "metric4",
+				MType: domain.Gauge,
+				Delta: nil,
+				Value: ptrFloat64(0.0),
+			},
+		},
+		{
+			name: "valid counter with nil delta and value",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric5",
+				MType: "counter",
+			},
+			expected: &domain.Metrics{
+				ID:    "metric5",
+				MType: domain.Counter,
+				Delta: nil,
+				Value: nil,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.request.ToDomain()
+			assert.Equal(t, tt.expected.ID, result.ID)
+			assert.Equal(t, tt.expected.MType, result.MType)
+			assert.Equal(t, tt.expected.Delta, result.Delta)
+			assert.Equal(t, tt.expected.Value, result.Value)
 		})
 	}
 }
@@ -276,68 +407,115 @@ func TestUpdateMetricPathRequest_ToDomain(t *testing.T) {
 		expected *domain.Metrics
 	}{
 		{
-			name: "valid request with gauge type",
+			name: "valid counter conversion",
 			request: UpdateMetricPathRequest{
 				ID:    "metric1",
-				MType: "gauge",
-				Value: "10.5", // valid float value
+				MType: "counter",
+				Value: "100",
 			},
 			expected: &domain.Metrics{
 				ID:    "metric1",
-				MType: domain.Gauge,
-				Value: ptrFloat64(10.5),
-			},
-		},
-		{
-			name: "valid request with counter type",
-			request: UpdateMetricPathRequest{
-				ID:    "metric2",
-				MType: "counter",
-				Value: "5", // valid int value
-			},
-			expected: &domain.Metrics{
-				ID:    "metric2",
 				MType: domain.Counter,
-				Delta: ptrInt64(5),
+				Delta: ptrInt64(100),
+				Value: nil,
 			},
 		},
 		{
-			name: "invalid value for gauge type",
+			name: "valid gauge conversion",
 			request: UpdateMetricPathRequest{
-				ID:    "metric3",
+				ID:    "metric2",
 				MType: "gauge",
-				Value: "invalidValue", // invalid value for float
+				Value: "42.42",
+			},
+			expected: &domain.Metrics{
+				ID:    "metric2",
+				MType: domain.Gauge,
+				Delta: nil,
+				Value: ptrFloat64(42.42),
+			},
+		},
+		{
+			name: "invalid counter value (non-numeric)",
+			request: UpdateMetricPathRequest{
+				ID:    "metric3",
+				MType: "counter",
+				Value: "invalid",
 			},
 			expected: &domain.Metrics{
 				ID:    "metric3",
-				MType: domain.Gauge,
-				Value: nil, // since parsing failed
+				MType: domain.Counter,
+				Delta: nil, // Ошибка парсинга, delta остаётся nil
+				Value: nil,
 			},
 		},
 		{
-			name: "invalid value for counter type",
+			name: "invalid gauge value (non-numeric)",
 			request: UpdateMetricPathRequest{
 				ID:    "metric4",
-				MType: "counter",
-				Value: "invalidValue", // invalid value for int
+				MType: "gauge",
+				Value: "invalid",
 			},
 			expected: &domain.Metrics{
 				ID:    "metric4",
-				MType: domain.Counter,
-				Delta: nil, // since parsing failed
+				MType: domain.Gauge,
+				Delta: nil,
+				Value: nil, // Ошибка парсинга, value остаётся nil
 			},
 		},
 		{
-			name: "missing value for gauge type",
+			name: "zero gauge value",
 			request: UpdateMetricPathRequest{
 				ID:    "metric5",
 				MType: "gauge",
-				Value: "", // empty string should be invalid
+				Value: "0.0",
 			},
 			expected: &domain.Metrics{
 				ID:    "metric5",
 				MType: domain.Gauge,
-				Value: nil, // since parsing failed
+				Delta: nil,
+				Value: ptrFloat64(0.0),
+			},
+		},
+		{
+			name: "zero counter value",
+			request: UpdateMetricPathRequest{
+				ID:    "metric6",
+				MType: "counter",
+				Value: "0",
+			},
+			expected: &domain.Metrics{
+				ID:    "metric6",
+				MType: domain.Counter,
+				Delta: ptrInt64(0),
+				Value: nil,
+			},
+		},
+		{
+			name: "empty value",
+			request: UpdateMetricPathRequest{
+				ID:    "metric7",
+				MType: "gauge",
+				Value: "",
+			},
+			expected: &domain.Metrics{
+				ID:    "metric7",
+				MType: domain.Gauge,
+				Delta: nil,
+				Value: nil, // Пустое значение не может быть преобразовано
+			},
+		},
+		{
+			name: "invalid metric type",
+			request: UpdateMetricPathRequest{
+				ID:    "metric8",
+				MType: "unknown",
+				Value: "123",
+			},
+			expected: &domain.Metrics{
+				ID:    "metric8",
+				MType: "unknown", // Остаётся некорректным, но парсинг не происходит
+				Delta: nil,
+				Value: nil,
 			},
 		},
 	}
@@ -345,119 +523,18 @@ func TestUpdateMetricPathRequest_ToDomain(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.request.ToDomain()
-			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expected.ID, result.ID)
+			assert.Equal(t, tt.expected.MType, result.MType)
+			assert.Equal(t, tt.expected.Delta, result.Delta)
+			assert.Equal(t, tt.expected.Value, result.Value)
 		})
 	}
 }
 
-func TestGetMetricBodyRequest_Validate(t *testing.T) {
-	tests := []struct {
-		name     string
-		request  GetMetricBodyRequest
-		expected string
-	}{
-		{
-			name: "valid request with valid ID and valid metric type",
-			request: GetMetricBodyRequest{
-				ID:    "metric1",
-				MType: "gauge", // valid metric type
-			},
-			expected: "", // no error expected
-		},
-		{
-			name: "valid request with valid ID and counter type",
-			request: GetMetricBodyRequest{
-				ID:    "metric2",
-				MType: "counter", // valid metric type
-			},
-			expected: "", // no error expected
-		},
-		{
-			name: "invalid metric type",
-			request: GetMetricBodyRequest{
-				ID:    "metric3",
-				MType: "unknown", // invalid metric type
-			},
-			expected: "invalid metric type", // expect specific error
-		},
-		{
-			name: "empty ID",
-			request: GetMetricBodyRequest{
-				ID:    "",      // empty ID
-				MType: "gauge", // valid metric type
-			},
-			expected: "id is required", // expect specific error
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.request.Validate()
-			if tt.expected == "" {
-				require.NoError(t, err) // no error expected
-			} else {
-				assert.EqualError(t, err, tt.expected) // check if the error matches the expected one
-			}
-		})
-	}
+func ptrInt64(i int64) *int64 {
+	return &i
 }
 
-func TestGetMetricPathRequest_Validate(t *testing.T) {
-	tests := []struct {
-		name     string
-		request  GetMetricPathRequest
-		expected string
-	}{
-		{
-			name: "valid request with valid ID and valid metric type",
-			request: GetMetricPathRequest{
-				ID:    "metric1",
-				MType: "gauge", // valid metric type
-			},
-			expected: "", // no error expected
-		},
-		{
-			name: "valid request with valid ID and counter type",
-			request: GetMetricPathRequest{
-				ID:    "metric2",
-				MType: "counter", // valid metric type
-			},
-			expected: "", // no error expected
-		},
-		{
-			name: "invalid metric type",
-			request: GetMetricPathRequest{
-				ID:    "metric3",
-				MType: "unknown", // invalid metric type
-			},
-			expected: "invalid metric type", // expect specific error
-		},
-		{
-			name: "empty ID",
-			request: GetMetricPathRequest{
-				ID:    "",      // empty ID
-				MType: "gauge", // valid metric type
-			},
-			expected: "id is required", // expect specific error
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.request.Validate()
-			if tt.expected == "" {
-				require.NoError(t, err) // no error expected
-			} else {
-				assert.EqualError(t, err, tt.expected) // check if the error matches the expected one
-			}
-		})
-	}
-}
-
-func ptrFloat64(v float64) *float64 {
-	return &v
-}
-
-func ptrInt64(v int64) *int64 {
-	return &v
+func ptrFloat64(f float64) *float64 {
+	return &f
 }
