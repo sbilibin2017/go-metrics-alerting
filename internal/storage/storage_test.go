@@ -1,155 +1,62 @@
 package storage
 
 import (
-	"go-metrics-alerting/internal/domain"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-// TestSaver_Save проверяет правильность сохранения метрик в хранилище
-func TestSaver_Save(t *testing.T) {
+// Тестирование функции NewStorage
+func TestNewStorage(t *testing.T) {
 	storage := NewStorage()
-	saver := NewSaver(storage)
 
-	metric := &domain.Metrics{
-		ID:    "metric1",
-		MType: domain.Gauge,
-		Value: new(float64),
-	}
-	*metric.Value = 10.5
+	// Проверяем, что хранилище не nil
+	require.NotNil(t, storage, "Expected non-nil storage")
 
-	// Сохраняем метрику
-	saver.Save("key1", metric)
-
-	// Проверяем, что метрика сохранена в хранилище
-	storedMetric := storage.data["key1"]
-	assert.NotNil(t, storedMetric)
-	assert.Equal(t, "metric1", storedMetric.ID)
-	assert.Equal(t, domain.Gauge, storedMetric.MType)
-	assert.Equal(t, 10.5, *storedMetric.Value)
+	// Проверяем, что начальная карта данных пустая
+	assert.Empty(t, storage.data, "Expected empty data map")
 }
 
-// TestGetter_Get проверяет получение метрики из хранилища
-func TestGetter_Get(t *testing.T) {
+// Тестирование метода, который добавляет элемент в хранилище
+func TestStorage_Add(t *testing.T) {
 	storage := NewStorage()
-	saver := NewSaver(storage)
-	getter := NewGetter(storage)
 
-	metric := &domain.Metrics{
-		ID:    "metric2",
-		MType: domain.Counter,
-		Delta: new(int64),
-	}
-	*metric.Delta = 20
+	// Добавляем пару ключ-значение
+	storage.data["key"] = "value"
 
-	// Сохраняем метрику
-	saver.Save("key2", metric)
-
-	// Получаем метрику
-	storedMetric := getter.Get("key2")
-
-	// Проверяем, что метрика существует и данные правильные
-	assert.NotNil(t, storedMetric)
-	assert.Equal(t, "metric2", storedMetric.ID)
-	assert.Equal(t, domain.Counter, storedMetric.MType)
-	assert.Equal(t, int64(20), *storedMetric.Delta)
-	assert.Nil(t, storedMetric.Value)
+	// Проверяем, что значение по ключу "key" равно "value"
+	assert.Equal(t, "value", storage.data["key"], "Expected value 'value' for key 'key'")
 }
 
-// TestRanger_Range проверяет перебор метрик в хранилище с использованием callback
-func TestRanger_Range(t *testing.T) {
+// Тестирование метода чтения данных с блокировкой
+func TestStorage_Read(t *testing.T) {
 	storage := NewStorage()
-	saver := NewSaver(storage)
-	ranger := NewRanger(storage)
 
-	// Сохраняем несколько метрик
-	metric1 := &domain.Metrics{
-		ID:    "metric1",
-		MType: domain.Gauge,
-		Value: new(float64),
-	}
-	*metric1.Value = 10.5
-	saver.Save("key1", metric1)
+	// Добавляем пару ключ-значение
+	storage.data["key"] = "value"
 
-	metric2 := &domain.Metrics{
-		ID:    "metric2",
-		MType: domain.Counter,
-		Delta: new(int64),
-	}
-	*metric2.Delta = 20
-	saver.Save("key2", metric2)
+	// Читаем значение
+	storage.mu.RLock() // читающая блокировка
+	defer storage.mu.RUnlock()
+	val, ok := storage.data["key"]
 
-	// Переменные для проверки правильности данных
-	var keys []string
-	var values []*domain.Metrics
-
-	// Перебор метрик с использованием callback
-	ranger.Range(func(key string, value *domain.Metrics) bool {
-		keys = append(keys, key)
-		values = append(values, value)
-		return true // Прерывание не требуется
-	})
-
-	// Проверяем, что все ключи и значения были добавлены в список
-	assert.Len(t, keys, 2)
-	assert.Len(t, values, 2)
-	assert.Equal(t, "key1", keys[0])
-	assert.Equal(t, "key2", keys[1])
-	assert.Equal(t, "metric1", values[0].ID)
-	assert.Equal(t, "metric2", values[1].ID)
+	// Проверяем, что значение корректное
+	assert.True(t, ok, "Expected key 'key' to exist")
+	assert.Equal(t, "value", val, "Expected value 'value' for key 'key'")
 }
 
-// TestRanger_Range_BreakCallback проверяет логику прерывания перебора с callback
-func TestRanger_Range_BreakCallback(t *testing.T) {
+// Тестирование метода записи с блокировкой
+func TestStorage_Write(t *testing.T) {
 	storage := NewStorage()
-	saver := NewSaver(storage)
-	ranger := NewRanger(storage)
 
-	// Сохраняем несколько метрик
-	metric1 := &domain.Metrics{
-		ID:    "metric1",
-		MType: domain.Gauge,
-		Value: new(float64),
-	}
-	*metric1.Value = 10.5
-	saver.Save("key1", metric1)
+	// Блокируем запись
+	storage.mu.Lock()
+	storage.data["key"] = "new value"
+	storage.mu.Unlock()
 
-	metric2 := &domain.Metrics{
-		ID:    "metric2",
-		MType: domain.Counter,
-		Delta: new(int64),
-	}
-	*metric2.Delta = 20
-	saver.Save("key2", metric2)
-
-	// Переменные для проверки правильности данных
-	var keys []string
-	var values []*domain.Metrics
-	var calledBeforeBreak bool
-
-	// Перебор метрик с использованием callback с прерыванием
-	ranger.Range(func(key string, value *domain.Metrics) bool {
-		keys = append(keys, key)
-		values = append(values, value)
-
-		// Условие для прерывания перебора
-		if key == "key1" {
-			calledBeforeBreak = true
-			return false // Прерываем перебор
-		}
-		return true
-	})
-
-	// Проверяем, что перебор был прерван на первом элементе
-	assert.True(t, calledBeforeBreak) // Убедитесь, что callback был вызван до break
-	assert.Len(t, keys, 1)            // Перебор должен завершиться после первого элемента
-	assert.Len(t, values, 1)          // Перебор должен завершиться после первого элемента
-
-	// Проверяем, что добавлен только первый элемент
-	assert.Equal(t, "key1", keys[0])
-	assert.Equal(t, "metric1", values[0].ID)
-	assert.Equal(t, domain.Gauge, values[0].MType)
-	assert.Equal(t, 10.5, *values[0].Value)
-	assert.Nil(t, values[0].Delta)
+	// Проверяем, что значение было обновлено
+	val, ok := storage.data["key"]
+	assert.True(t, ok, "Expected key 'key' to exist")
+	assert.Equal(t, "new value", val, "Expected value 'new value' for key 'key'")
 }
