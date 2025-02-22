@@ -2,12 +2,13 @@ package types
 
 import (
 	"fmt"
+	"go-metrics-alerting/internal/apierror"
 	"go-metrics-alerting/internal/domain"
 	"net/http"
 	"regexp"
 )
 
-//go:generate easyjson -all metric.go
+//go:generate easyjson -all update_metric_body.go
 type UpdateMetricBodyRequest struct {
 	ID    string   `json:"id"`
 	MType string   `json:"type"`
@@ -16,10 +17,10 @@ type UpdateMetricBodyRequest struct {
 }
 
 // ValidateUpdateMetricBodyRequest проверяет данные, полученные из тела запроса
-func (r *UpdateMetricBodyRequest) Validate() *APIError {
+func (r *UpdateMetricBodyRequest) Validate() *apierror.APIError {
 	// Проверка на допустимый ID
 	if len(r.ID) == 0 {
-		return &APIError{
+		return &apierror.APIError{
 			Status:  http.StatusNotFound,
 			Message: fmt.Sprintf("metric ID must not be empty, received: '%s'", r.ID),
 		}
@@ -28,7 +29,7 @@ func (r *UpdateMetricBodyRequest) Validate() *APIError {
 	// Проверка ID с использованием регулярного выражения
 	re := regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 	if !re.MatchString(r.ID) {
-		return &APIError{
+		return &apierror.APIError{
 			Status:  http.StatusNotFound,
 			Message: fmt.Sprintf("invalid metric ID format, received: '%s'", r.ID),
 		}
@@ -36,7 +37,7 @@ func (r *UpdateMetricBodyRequest) Validate() *APIError {
 
 	// Проверка на допустимый тип метрики
 	if r.MType != string(domain.Gauge) && r.MType != string(domain.Counter) {
-		return &APIError{
+		return &apierror.APIError{
 			Status:  http.StatusBadRequest,
 			Message: fmt.Sprintf("invalid metric type, received: '%s'", r.MType),
 		}
@@ -44,7 +45,7 @@ func (r *UpdateMetricBodyRequest) Validate() *APIError {
 
 	// Для gauge значение должно быть числом с плавающей точкой
 	if r.Value != nil && r.Delta != nil {
-		return &APIError{
+		return &apierror.APIError{
 			Status:  http.StatusBadRequest,
 			Message: fmt.Sprintf("only value('%v') or delta('%v')) must be set", r.Value, r.Delta),
 		}
@@ -52,7 +53,7 @@ func (r *UpdateMetricBodyRequest) Validate() *APIError {
 
 	// Для gauge значение должно быть числом с плавающей точкой
 	if r.MType == string(domain.Gauge) && r.Value == nil {
-		return &APIError{
+		return &apierror.APIError{
 			Status:  http.StatusBadRequest,
 			Message: fmt.Sprintf("value is required for gauge metrics, received: '%v'", r.Value),
 		}
@@ -60,7 +61,7 @@ func (r *UpdateMetricBodyRequest) Validate() *APIError {
 
 	// Для counter значение должно быть целым числом
 	if r.MType == string(domain.Counter) && r.Delta == nil {
-		return &APIError{
+		return &apierror.APIError{
 			Status:  http.StatusBadRequest,
 			Message: fmt.Sprintf("delta is required for counter metrics, received: '%v'", r.Delta),
 		}
