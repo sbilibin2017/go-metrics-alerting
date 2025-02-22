@@ -21,26 +21,29 @@ type MetricFacade interface {
 
 // MetricAgentService структура агента для сбора и отправки метрик
 type MetricAgentService struct {
-	config              *configs.AgentConfig
-	collectorStrategies map[domain.MType]MetricsCollectorStrategy
-	facade              MetricFacade
-	metricsCh           chan *domain.Metrics
-	logger              *zap.Logger
+	config                   *configs.AgentConfig
+	collectorGaugeStrategy   MetricsCollectorStrategy
+	collectorCounterStrategy MetricsCollectorStrategy
+	facade                   MetricFacade
+	metricsCh                chan *domain.Metrics
+	logger                   *zap.Logger
 }
 
 // NewMetricAgentService создает новый экземпляр MetricAgentService с логгером
 func NewMetricAgentService(
 	config *configs.AgentConfig,
-	collectorStrategies map[domain.MType]MetricsCollectorStrategy,
+	collectorCounterStrategy MetricsCollectorStrategy,
+	collectorGaugeStrategy MetricsCollectorStrategy,
 	facade MetricFacade,
 	logger *zap.Logger,
 ) *MetricAgentService {
 	return &MetricAgentService{
-		config:              config,
-		collectorStrategies: collectorStrategies,
-		facade:              facade,
-		metricsCh:           make(chan *domain.Metrics, 100),
-		logger:              logger,
+		config:                   config,
+		collectorCounterStrategy: collectorCounterStrategy,
+		collectorGaugeStrategy:   collectorGaugeStrategy,
+		facade:                   facade,
+		metricsCh:                make(chan *domain.Metrics, 100),
+		logger:                   logger,
 	}
 }
 
@@ -70,12 +73,13 @@ func (a *MetricAgentService) Run(signalCh chan os.Signal) {
 
 // collectMetrics собирает метрики с использованием коллекционеров
 func (a *MetricAgentService) collectMetrics() {
-	for strategy, collector := range a.collectorStrategies {
-		a.logger.Debug("Collecting metric", zap.String("strategy", string(strategy)))
-		metrics := collector.Collect()
-		for _, metric := range metrics {
-			a.metricsCh <- metric
-		}
+	a.logger.Debug("Collecting counter metrics")
+	for _, metric := range a.collectorCounterStrategy.Collect() {
+		a.metricsCh <- metric
+	}
+	a.logger.Debug("Collecting gauge metrics")
+	for _, metric := range a.collectorGaugeStrategy.Collect() {
+		a.metricsCh <- metric
 	}
 }
 

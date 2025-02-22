@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// Mocks
+// Моки
 type MockUpdateMetricStrategy struct {
 	mock.Mock
 }
@@ -48,18 +48,13 @@ func TestUpdateMetricService_Update_GaugeMetric(t *testing.T) {
 	mockGaugeStrategy := new(MockUpdateMetricStrategy)
 	mockCounterStrategy := new(MockUpdateMetricStrategy)
 
-	// Создаём мапу стратегий
-	strategies := map[domain.MType]UpdateMetricStrategy{
-		domain.Gauge:   mockGaugeStrategy,
-		domain.Counter: mockCounterStrategy,
-	}
+	// Создаём сервис с двумя стратегиями
+	updateService := NewUpdateMetricService(mockCounterStrategy, mockGaugeStrategy)
 
-	// Создаём сервис с мапой стратегий
-	updateService := NewUpdateMetricService(strategies)
+	value := float64(5)
+	metric := &domain.Metrics{ID: "1", MType: domain.Gauge, Value: &value}
 
-	v := 10.0
-	metric := &domain.Metrics{ID: "1", MType: domain.Gauge, Value: &v}
-
+	// Ожидаем вызов метода Update на стратегии для Counter
 	mockGaugeStrategy.On("Update", metric).Return(metric)
 
 	result := updateService.UpdateMetric(metric)
@@ -73,18 +68,13 @@ func TestUpdateMetricService_Update_CounterMetric(t *testing.T) {
 	mockGaugeStrategy := new(MockUpdateMetricStrategy)
 	mockCounterStrategy := new(MockUpdateMetricStrategy)
 
-	// Создаём мапу стратегий
-	strategies := map[domain.MType]UpdateMetricStrategy{
-		domain.Gauge:   mockGaugeStrategy,
-		domain.Counter: mockCounterStrategy,
-	}
-
-	// Создаём сервис с мапой стратегий
-	updateService := NewUpdateMetricService(strategies)
+	// Создаём сервис с двумя стратегиями
+	updateService := NewUpdateMetricService(mockCounterStrategy, mockGaugeStrategy)
 
 	delta := int64(5)
 	metric := &domain.Metrics{ID: "1", MType: domain.Counter, Delta: &delta}
 
+	// Ожидаем вызов метода Update на стратегии для Counter
 	mockCounterStrategy.On("Update", metric).Return(metric)
 
 	result := updateService.UpdateMetric(metric)
@@ -98,23 +88,17 @@ func TestUpdateMetricService_Update_UnknownMetricType(t *testing.T) {
 	mockGaugeStrategy := new(MockUpdateMetricStrategy)
 	mockCounterStrategy := new(MockUpdateMetricStrategy)
 
-	// Создаём мапу стратегий, в которой нет стратегии для "UnknownType"
-	strategies := map[domain.MType]UpdateMetricStrategy{
-		domain.Gauge:   mockGaugeStrategy,
-		domain.Counter: mockCounterStrategy,
-	}
-
-	// Создаём сервис с мапой стратегий
-	updateService := NewUpdateMetricService(strategies)
+	// Создаём сервис с двумя стратегиями
+	updateService := NewUpdateMetricService(mockCounterStrategy, mockGaugeStrategy)
 
 	// Метрика с неизвестным типом
-	metric := &domain.Metrics{ID: "1", MType: "UnknownType"}
+	metric := &domain.Metrics{ID: "1", MType: "UnknownType"} // "UnknownType" - это строка, что может быть невалидным типом
 
 	// Вызываем UpdateMetric
 	result := updateService.UpdateMetric(metric)
 
-	// Ожидаем, что результат будет nil
-	assert.Nil(t, result)
+	// Ожидаем, что результат будет nil, но если в сервисе должна быть проверка на неизвестный тип, можно проверить это:
+	assert.Nil(t, result) // Если UnknownType это неверный тип, результат должен быть nil.
 }
 
 func TestGetMetricService_Get(t *testing.T) {

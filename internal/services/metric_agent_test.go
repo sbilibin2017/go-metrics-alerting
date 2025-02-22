@@ -3,7 +3,6 @@ package services
 import (
 	"go-metrics-alerting/internal/configs"
 	"go-metrics-alerting/internal/domain"
-
 	"os"
 	"testing"
 	"time"
@@ -38,17 +37,24 @@ func TestMetricAgentService_Run(t *testing.T) {
 	mockFacade := new(MockMetricFacade)
 
 	// Пример метрики
-	metrics := []*domain.Metrics{
+	gaugeMetrics := []*domain.Metrics{
 		{
-			ID:    "metric1",
+			ID:    "gaugeMetric1",
 			MType: domain.Gauge,
 			Value: float64Ptr(5),
 		},
 	}
+	counterMetrics := []*domain.Metrics{
+		{
+			ID:    "counterMetric1",
+			MType: domain.Counter,
+			Value: float64Ptr(10),
+		},
+	}
 
 	// Настройка моков
-	mockGaugeCollector.On("Collect").Return(metrics)
-	mockCounterCollector.On("Collect").Return([]*domain.Metrics{})
+	mockGaugeCollector.On("Collect").Return(gaugeMetrics)
+	mockCounterCollector.On("Collect").Return(counterMetrics)
 	mockFacade.On("UpdateMetric", mock.AnythingOfType("*domain.Metrics")).Return(nil)
 
 	// Конфигурация агента
@@ -61,14 +67,8 @@ func TestMetricAgentService_Run(t *testing.T) {
 	// Используем zaptest.Logger
 	logger := zaptest.NewLogger(t)
 
-	// Создаем мапу стратегий
-	collectorStrategies := map[domain.MType]MetricsCollectorStrategy{
-		domain.Gauge:   mockGaugeCollector,
-		domain.Counter: mockCounterCollector,
-	}
-
-	// Создаем агент
-	agent := NewMetricAgentService(config, collectorStrategies, mockFacade, logger)
+	// Создаем агент с двумя стратегиями коллекции
+	agent := NewMetricAgentService(config, mockCounterCollector, mockGaugeCollector, mockFacade, logger)
 
 	// Канал для сигнала завершения
 	signalCh := make(chan os.Signal, 1)
@@ -79,12 +79,12 @@ func TestMetricAgentService_Run(t *testing.T) {
 	// Ждем, чтобы агент успел собрать и отправить метрики
 	time.Sleep(1 * time.Second)
 
-	// Проверка вызовов
+	// Проверка вызовов для первого и второго коллекционера
 	mockGaugeCollector.AssertExpectations(t)
 	mockCounterCollector.AssertExpectations(t)
 	mockFacade.AssertExpectations(t)
 
-	// Проверяем, что метод Collect был вызван
+	// Проверяем, что метод Collect был вызван для первого и второго коллекционера
 	mockGaugeCollector.AssertCalled(t, "Collect")
 	mockCounterCollector.AssertCalled(t, "Collect")
 	mockFacade.AssertCalled(t, "UpdateMetric", mock.AnythingOfType("*domain.Metrics"))
@@ -97,17 +97,24 @@ func TestMetricAgentService_Run_ShutdownSignal(t *testing.T) {
 	mockFacade := new(MockMetricFacade)
 
 	// Пример метрики
-	metrics := []*domain.Metrics{
+	gaugeMetrics := []*domain.Metrics{
 		{
-			ID:    "metric1",
+			ID:    "gaugeMetric1",
 			MType: domain.Gauge,
 			Value: float64Ptr(5),
 		},
 	}
+	counterMetrics := []*domain.Metrics{
+		{
+			ID:    "counterMetric1",
+			MType: domain.Counter,
+			Value: float64Ptr(10),
+		},
+	}
 
 	// Настройка моков
-	mockGaugeCollector.On("Collect").Return(metrics)
-	mockCounterCollector.On("Collect").Return([]*domain.Metrics{})
+	mockGaugeCollector.On("Collect").Return(gaugeMetrics)
+	mockCounterCollector.On("Collect").Return(counterMetrics)
 
 	// Конфигурация агента
 	config := &configs.AgentConfig{
@@ -119,14 +126,8 @@ func TestMetricAgentService_Run_ShutdownSignal(t *testing.T) {
 	// Используем zaptest.Logger
 	logger := zaptest.NewLogger(t)
 
-	// Создаем мапу стратегий
-	collectorStrategies := map[domain.MType]MetricsCollectorStrategy{
-		domain.Gauge:   mockGaugeCollector,
-		domain.Counter: mockCounterCollector,
-	}
-
-	// Создаем агент
-	agent := NewMetricAgentService(config, collectorStrategies, mockFacade, logger)
+	// Создаем агент с двумя стратегиями коллекции
+	agent := NewMetricAgentService(config, mockCounterCollector, mockGaugeCollector, mockFacade, logger)
 
 	// Канал для сигнала завершения
 	signalCh := make(chan os.Signal, 1)
