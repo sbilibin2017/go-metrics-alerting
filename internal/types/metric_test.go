@@ -15,7 +15,7 @@ func TestUpdateMetricBodyRequest_Validate(t *testing.T) {
 		expected int
 	}{
 		{
-			name: "valid counter request",
+			name: "valid counter request with delta",
 			request: UpdateMetricBodyRequest{
 				ID:    "metric1",
 				MType: "counter",
@@ -24,7 +24,7 @@ func TestUpdateMetricBodyRequest_Validate(t *testing.T) {
 			expected: http.StatusOK,
 		},
 		{
-			name: "valid gauge request",
+			name: "valid gauge request with value",
 			request: UpdateMetricBodyRequest{
 				ID:    "metric2",
 				MType: "gauge",
@@ -90,6 +90,26 @@ func TestUpdateMetricBodyRequest_Validate(t *testing.T) {
 				Value: ptrFloat64(0.0),
 			},
 			expected: http.StatusOK,
+		},
+		// Новый тест: некорректный тип метрики для Counter
+		{
+			name: "missing value for counter (should have delta)",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric7",
+				MType: "counter",
+				Value: ptrFloat64(10.5), // Counter не должен иметь value, только delta
+			},
+			expected: http.StatusBadRequest,
+		},
+		// Новый тест: некорректный тип метрики для Gauge
+		{
+			name: "missing delta for gauge (should have value)",
+			request: UpdateMetricBodyRequest{
+				ID:    "metric8",
+				MType: "gauge",
+				Delta: ptrInt64(5), // Gauge не должен иметь delta, только value
+			},
+			expected: http.StatusBadRequest,
 		},
 	}
 
@@ -161,6 +181,16 @@ func TestUpdateMetricPathRequest_Validate(t *testing.T) {
 				ID:    "metric5",
 				MType: "gauge",
 				Value: "invalid",
+			},
+			expected: http.StatusBadRequest,
+		},
+		// Новый тест: отсутствие значения для gauge (не валидно)
+		{
+			name: "missing value for gauge",
+			request: UpdateMetricPathRequest{
+				ID:    "metric6",
+				MType: "gauge",
+				Value: "", // Пустое значение для Gauge
 			},
 			expected: http.StatusBadRequest,
 		},

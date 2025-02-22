@@ -2,7 +2,6 @@ package types
 
 import (
 	"go-metrics-alerting/internal/domain"
-	"go-metrics-alerting/internal/validators" // Импортируем пакет с функциями валидации
 	"net/http"
 	"strconv"
 )
@@ -27,30 +26,39 @@ func (r *UpdateMetricBodyRequest) ToDomain() *domain.Metrics {
 
 // Метод для валидации UpdateMetricBodyRequest
 func (r *UpdateMetricBodyRequest) Validate() *APIError {
-	if err := validators.ValidateString(r.ID); err != nil {
-		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
+	// Валидация ID
+	if r.ID == "" {
+		return &APIError{Status: http.StatusNotFound, Message: "id is required"}
 	}
+
+	// Валидация типа метрики
 	mType := domain.MType(r.MType)
-	if err := validators.ValidateMType(mType); err != nil {
-		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
+	if mType != domain.Counter && mType != domain.Gauge {
+		return &APIError{Status: http.StatusBadRequest, Message: "invalid metric type"}
 	}
-	switch mType {
-	case domain.Counter:
-		if err := validators.ValidateDelta(r.Delta); err != nil {
-			return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
-		}
-	case domain.Gauge:
-		if err := validators.ValidateValue(r.Value); err != nil {
-			return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
-		}
+
+	// Проверка на необходимое значение для Delta или Value
+	if (r.Delta != nil && r.Value != nil) || (r.Delta == nil && r.Value == nil) {
+		return &APIError{Status: http.StatusBadRequest, Message: "delta or value must be nil"}
 	}
+
+	// Валидация для типа Counter (требуется delta)
+	if mType == domain.Counter && r.Delta == nil {
+		return &APIError{Status: http.StatusBadRequest, Message: "delta is required for Counter metric"}
+	}
+
+	// Валидация для типа Gauge (требуется value)
+	if mType == domain.Gauge && r.Value == nil {
+		return &APIError{Status: http.StatusBadRequest, Message: "value is required for Gauge metric"}
+	}
+
 	return nil
 }
 
 // UpdateMetricPathRequest является структурой для обновления метрики через путь запроса.
 type UpdateMetricPathRequest struct {
-	ID    string `json:"id"`
-	MType string `json:"type"`
+	ID    string `json:"id"`   // имя метрики
+	MType string `json:"type"` // параметр, принимающий значение gauge или counter
 	Value string `json:"value"`
 }
 
@@ -81,15 +89,31 @@ func (r *UpdateMetricPathRequest) ToDomain() *domain.Metrics {
 
 // Метод для валидации UpdateMetricPathRequest
 func (r *UpdateMetricPathRequest) Validate() *APIError {
-	if err := validators.ValidateString(r.ID); err != nil {
-		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
+	// Валидация ID
+	if r.ID == "" {
+		return &APIError{Status: http.StatusNotFound, Message: "id is required"}
 	}
-	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
-		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
+
+	// Валидация типа метрики
+	if r.MType != string(domain.Counter) && r.MType != string(domain.Gauge) {
+		return &APIError{Status: http.StatusBadRequest, Message: "invalid metric type"}
 	}
-	if err := validators.ValidateValueString(domain.MType(r.MType), r.Value); err != nil {
-		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
+
+	// Валидация значения строки
+	mType := domain.MType(r.MType)
+	switch mType {
+	case domain.Gauge:
+		_, err := strconv.ParseFloat(r.Value, 64)
+		if err != nil {
+			return &APIError{Status: http.StatusBadRequest, Message: "invalid value for Gauge metric, must be a valid float"}
+		}
+	case domain.Counter:
+		_, err := strconv.ParseInt(r.Value, 10, 64)
+		if err != nil {
+			return &APIError{Status: http.StatusBadRequest, Message: "invalid value for Counter metric, must be a valid integer"}
+		}
 	}
+
 	return nil
 }
 
@@ -101,11 +125,15 @@ type GetMetricRequest struct {
 
 // Метод для валидации GetMetricBodyRequest
 func (r *GetMetricRequest) Validate() *APIError {
-	if err := validators.ValidateString(r.ID); err != nil {
-		return &APIError{Status: http.StatusNotFound, Message: err.Error()}
+	// Валидация ID
+	if r.ID == "" {
+		return &APIError{Status: http.StatusNotFound, Message: "id is required"}
 	}
-	if err := validators.ValidateMType(domain.MType(r.MType)); err != nil {
-		return &APIError{Status: http.StatusBadRequest, Message: err.Error()}
+
+	// Валидация типа метрики
+	if r.MType != "counter" && r.MType != "gauge" {
+		return &APIError{Status: http.StatusBadRequest, Message: "invalid metric type"}
 	}
+
 	return nil
 }
