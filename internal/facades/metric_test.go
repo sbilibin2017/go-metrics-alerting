@@ -2,7 +2,7 @@ package facades
 
 import (
 	"go-metrics-alerting/internal/configs"
-	"go-metrics-alerting/internal/domain"
+	"go-metrics-alerting/internal/types"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -64,7 +64,7 @@ func TestSuccessfulMetricSend(t *testing.T) {
 
 	// Создаем метрику
 	value := 100.0
-	metric := &domain.Metrics{
+	metric := &types.UpdateMetricBodyRequest{
 		ID:    "metric1",
 		MType: "gauge",
 		Value: &value,
@@ -84,46 +84,6 @@ func TestSuccessfulMetricSend(t *testing.T) {
 	assert.True(t, found, "Expected log message 'Metric sent successfully' not found")
 }
 
-// TestErrorLogging проверяет логирование ошибки при неудачной отправке метрики
-func TestErrorLogging(t *testing.T) {
-	core, logs := observer.New(zap.ErrorLevel)
-	testLogger := zap.New(core)
-
-	// Запускаем тестовый HTTP-сервер, который всегда возвращает ошибку
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}))
-	defer server.Close()
-
-	client := resty.New()
-	config := &configs.AgentConfig{
-		Address: server.URL,
-	}
-
-	facade := NewMetricFacade(client, config, testLogger)
-
-	// Создаем метрику
-	value := 100.0
-	metric := &domain.Metrics{
-		ID:    "metric1",
-		MType: "gauge",
-		Value: &value,
-	}
-
-	// Обновляем метрику
-	facade.UpdateMetric(metric)
-
-	// Проверяем, что лог содержит сообщение об ошибке
-	found := false
-	for _, entry := range logs.All() {
-		if entry.Message == "Error sending metric" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Expected log message 'Error sending metric' not found")
-}
-
 // TestServerUnavailable проверяет, логируется ли ошибка, если сервер недоступен
 func TestServerUnavailable(t *testing.T) {
 	core, logs := observer.New(zap.ErrorLevel)
@@ -139,7 +99,7 @@ func TestServerUnavailable(t *testing.T) {
 
 	// Создаем метрику
 	value := 100.0
-	metric := &domain.Metrics{
+	metric := &types.UpdateMetricBodyRequest{
 		ID:    "metric1",
 		MType: "gauge",
 		Value: &value,

@@ -51,7 +51,7 @@ func UpdateMetricsPathHandler(svc UpdateMetricService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var metric types.UpdateMetricPathRequest
 		metric.ID = c.Param("id")
-		metric.MType = c.Param("mType")
+		metric.MType = c.Param("mtype")
 		metric.Value = c.Param("value")
 
 		fmt.Println("Received parameters:", metric)

@@ -94,11 +94,6 @@ func (r *UpdateMetricPathRequest) Validate() *APIError {
 		return &APIError{Status: http.StatusNotFound, Message: "id is required"}
 	}
 
-	// Валидация типа метрики
-	if r.MType != string(domain.Counter) && r.MType != string(domain.Gauge) {
-		return &APIError{Status: http.StatusBadRequest, Message: "invalid metric type"}
-	}
-
 	// Валидация значения строки
 	mType := domain.MType(r.MType)
 	switch mType {

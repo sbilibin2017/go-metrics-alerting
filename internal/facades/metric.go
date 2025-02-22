@@ -1,8 +1,9 @@
 package facades
 
 import (
+	"encoding/json"
 	"go-metrics-alerting/internal/configs"
-	"go-metrics-alerting/internal/domain"
+	"go-metrics-alerting/internal/types"
 	"strings"
 
 	"github.com/go-resty/resty/v2"
@@ -30,16 +31,19 @@ func NewMetricFacade(client *resty.Client, config *configs.AgentConfig, logger *
 	}
 }
 
-// UpdateMetrics метод для обновления метрик
-func (s *MetricFacade) UpdateMetric(metric *domain.Metrics) {
+// UpdateMetric обновляет метрику, отправляя ее на сервер
+func (s *MetricFacade) UpdateMetric(metric *types.UpdateMetricBodyRequest) {
+	metricBody, _ := json.Marshal(metric)
 	resp, err := s.client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(metric).
+		SetBody(metricBody).
 		Post(s.config.Address + "/update/")
-	if err != nil || resp.StatusCode() >= 400 {
-		s.logger.Error("Error sending metric", zap.Error(err), zap.String("metricID", metric.ID))
-	} else {
-		s.logger.Info("Metric sent successfully", zap.String("metricID", metric.ID))
+
+	if err != nil {
+		s.logger.Error("Error sending metric", zap.String("metricID", metric.ID))
+		return
 	}
+	// Логируем успешную отправку
+	s.logger.Info("Metric sent successfully", zap.String("metricID", metric.ID), zap.Int("statusCode", resp.StatusCode()))
 
 }

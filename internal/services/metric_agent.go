@@ -2,7 +2,7 @@ package services
 
 import (
 	"go-metrics-alerting/internal/configs"
-	"go-metrics-alerting/internal/domain"
+	"go-metrics-alerting/internal/types"
 	"os"
 	"time"
 
@@ -11,12 +11,12 @@ import (
 
 // Интерфейс для коллекционера метрик
 type MetricsCollectorStrategy interface {
-	Collect() []*domain.Metrics
+	Collect() []*types.UpdateMetricBodyRequest
 }
 
 // Интерфейс для фасада отправки метрик
 type MetricFacade interface {
-	UpdateMetric(metric *domain.Metrics)
+	UpdateMetric(metric *types.UpdateMetricBodyRequest)
 }
 
 // MetricAgentService структура агента для сбора и отправки метрик
@@ -25,7 +25,7 @@ type MetricAgentService struct {
 	collectorGaugeStrategy   MetricsCollectorStrategy
 	collectorCounterStrategy MetricsCollectorStrategy
 	facade                   MetricFacade
-	metricsCh                chan *domain.Metrics
+	metricsCh                chan *types.UpdateMetricBodyRequest
 	logger                   *zap.Logger
 }
 
@@ -42,7 +42,7 @@ func NewMetricAgentService(
 		collectorCounterStrategy: collectorCounterStrategy,
 		collectorGaugeStrategy:   collectorGaugeStrategy,
 		facade:                   facade,
-		metricsCh:                make(chan *domain.Metrics, 100),
+		metricsCh:                make(chan *types.UpdateMetricBodyRequest, 100),
 		logger:                   logger,
 	}
 }

@@ -2,7 +2,7 @@ package services
 
 import (
 	"go-metrics-alerting/internal/configs"
-	"go-metrics-alerting/internal/domain"
+	"go-metrics-alerting/internal/types"
 	"os"
 	"testing"
 	"time"
@@ -16,9 +16,9 @@ type MockMetricsCollectorStrategy struct {
 	mock.Mock
 }
 
-func (m *MockMetricsCollectorStrategy) Collect() []*domain.Metrics {
+func (m *MockMetricsCollectorStrategy) Collect() []*types.UpdateMetricBodyRequest {
 	args := m.Called()
-	return args.Get(0).([]*domain.Metrics)
+	return args.Get(0).([]*types.UpdateMetricBodyRequest)
 }
 
 // Мок для фасада метрик
@@ -26,7 +26,7 @@ type MockMetricFacade struct {
 	mock.Mock
 }
 
-func (m *MockMetricFacade) UpdateMetric(metric *domain.Metrics) {
+func (m *MockMetricFacade) UpdateMetric(metric *types.UpdateMetricBodyRequest) {
 	m.Called(metric)
 }
 
@@ -37,25 +37,25 @@ func TestMetricAgentService_Run(t *testing.T) {
 	mockFacade := new(MockMetricFacade)
 
 	// Пример метрики
-	gaugeMetrics := []*domain.Metrics{
+	gaugeMetrics := []*types.UpdateMetricBodyRequest{
 		{
 			ID:    "gaugeMetric1",
-			MType: domain.Gauge,
+			MType: "gauge",
 			Value: float64Ptr(5),
 		},
 	}
-	counterMetrics := []*domain.Metrics{
+	counterMetrics := []*types.UpdateMetricBodyRequest{
 		{
 			ID:    "counterMetric1",
-			MType: domain.Counter,
-			Value: float64Ptr(10),
+			MType: "counter",
+			Delta: int64Ptr(10),
 		},
 	}
 
 	// Настройка моков
 	mockGaugeCollector.On("Collect").Return(gaugeMetrics)
 	mockCounterCollector.On("Collect").Return(counterMetrics)
-	mockFacade.On("UpdateMetric", mock.AnythingOfType("*domain.Metrics")).Return(nil)
+	mockFacade.On("UpdateMetric", mock.AnythingOfType("*types.UpdateMetricBodyRequest")).Return(nil)
 
 	// Конфигурация агента
 	config := &configs.AgentConfig{
@@ -87,7 +87,7 @@ func TestMetricAgentService_Run(t *testing.T) {
 	// Проверяем, что метод Collect был вызван для первого и второго коллекционера
 	mockGaugeCollector.AssertCalled(t, "Collect")
 	mockCounterCollector.AssertCalled(t, "Collect")
-	mockFacade.AssertCalled(t, "UpdateMetric", mock.AnythingOfType("*domain.Metrics"))
+	mockFacade.AssertCalled(t, "UpdateMetric", mock.AnythingOfType("*types.UpdateMetricBodyRequest"))
 }
 
 func TestMetricAgentService_Run_ShutdownSignal(t *testing.T) {
@@ -97,18 +97,18 @@ func TestMetricAgentService_Run_ShutdownSignal(t *testing.T) {
 	mockFacade := new(MockMetricFacade)
 
 	// Пример метрики
-	gaugeMetrics := []*domain.Metrics{
+	gaugeMetrics := []*types.UpdateMetricBodyRequest{
 		{
 			ID:    "gaugeMetric1",
-			MType: domain.Gauge,
+			MType: "gauge",
 			Value: float64Ptr(5),
 		},
 	}
-	counterMetrics := []*domain.Metrics{
+	counterMetrics := []*types.UpdateMetricBodyRequest{
 		{
 			ID:    "counterMetric1",
-			MType: domain.Counter,
-			Value: float64Ptr(10),
+			MType: "counter",
+			Delta: int64Ptr(10),
 		},
 	}
 
@@ -145,7 +145,11 @@ func TestMetricAgentService_Run_ShutdownSignal(t *testing.T) {
 	mockFacade.AssertExpectations(t)
 }
 
-// Утилита для создания указателя на float64
+// Утилиты для создания указателей на float64 и int64
 func float64Ptr(f float64) *float64 {
 	return &f
+}
+
+func int64Ptr(i int64) *int64 {
+	return &i
 }
