@@ -20,6 +20,8 @@ func TestContentLengthMiddleware(t *testing.T) {
 
 	res, err := http.Get(tt.URL)
 	assert.NoError(t, err)
+	defer res.Body.Close() // Закрытие тела ответа
+
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 	assert.Equal(t, "13", res.Header.Get("Content-Length"))
 }
@@ -35,6 +37,8 @@ func TestDateMiddleware(t *testing.T) {
 
 	res, err := http.Get(tt.URL)
 	assert.NoError(t, err)
+	defer res.Body.Close() // Закрытие тела ответа
+
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 	dateHeader := res.Header.Get("Date")
 	// Проверяем, что дата в заголовке существует и соответствует формату RFC1123
@@ -53,6 +57,8 @@ func TestTextPlainContentTypeMiddleware(t *testing.T) {
 
 	res, err := http.Get(tt.URL)
 	assert.NoError(t, err)
+	defer res.Body.Close() // Закрытие тела ответа
+
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 	assert.Equal(t, "text/plain; charset=utf-8", res.Header.Get("Content-Type"))
 }
@@ -68,6 +74,8 @@ func TestJSONContentTypeMiddleware(t *testing.T) {
 
 	res, err := http.Get(tt.URL)
 	assert.NoError(t, err)
+	defer res.Body.Close() // Закрытие тела ответа
+
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 	assert.Equal(t, "application/json; charset=utf-8", res.Header.Get("Content-Type"))
 }
@@ -83,6 +91,8 @@ func TestHTMLContentTypeMiddleware(t *testing.T) {
 
 	res, err := http.Get(tt.URL)
 	assert.NoError(t, err)
+	defer res.Body.Close() // Закрытие тела ответа
+
 	assert.Equal(t, http.StatusOK, res.StatusCode)
 	assert.Equal(t, "text/html; charset=utf-8", res.Header.Get("Content-Type"))
 }
