@@ -1,17 +1,21 @@
 package storage
 
-// Saver управляет операцией записи в хранилище.
-type Saver struct {
-	storage *Storage
+import "sync"
+
+// Saver управляет операцией записи в обобщённое хранилище.
+type Saver[T any] struct {
+	storage *Storage[T]
+	mu      sync.RWMutex
 }
 
-func NewSaver(storage *Storage) *Saver {
-	return &Saver{storage: storage}
+// NewSaver создаёт новый экземпляр Saver для работы с хранилищем типа T.
+func NewSaver[T any](storage *Storage[T]) *Saver[T] {
+	return &Saver[T]{storage: storage}
 }
 
-func (s *Saver) Save(key string, value string) bool {
-	s.storage.mu.Lock()
-	defer s.storage.mu.Unlock()
+// Save сохраняет данные в хранилище по указанному ключу.
+func (s *Saver[T]) Save(key string, value T) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.storage.data[key] = value
-	return true
 }

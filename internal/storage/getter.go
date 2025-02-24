@@ -1,18 +1,24 @@
 package storage
 
-// Getter управляет операцией чтения из хранилища.
-type Getter struct {
-	storage *Storage
+import (
+	"sync"
+)
+
+// Getter управляет операцией чтения из обобщённого хранилища.
+type Getter[T any] struct {
+	storage *Storage[T]
+	mu      sync.RWMutex
 }
 
-func NewGetter(storage *Storage) *Getter {
-	return &Getter{storage: storage}
+// NewGetter создаёт новый экземпляр Getter для работы с хранилищем типа T.
+func NewGetter[T any](storage *Storage[T]) *Getter[T] {
+	return &Getter[T]{storage: storage}
 }
 
-// Get возвращает значение по ключу и флаг, существует ли ключ в хранилище.
-func (g *Getter) Get(key string) (string, bool) {
-	g.storage.mu.RLock()
-	defer g.storage.mu.RUnlock()
-	val, exists := g.storage.data[key]
-	return val, exists
+// Get получает данные из хранилища по указанному ключу.
+func (g *Getter[T]) Get(key string) (T, bool) {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	value, exists := g.storage.data[key]
+	return value, exists
 }

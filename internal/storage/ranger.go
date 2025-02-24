@@ -1,17 +1,24 @@
 package storage
 
+import (
+	"sync"
+)
+
 // Ranger управляет операцией перебора элементов в хранилище.
-type Ranger struct {
-	storage *Storage
+type Ranger[T any] struct {
+	storage *Storage[T]
+	mu      sync.RWMutex
 }
 
-func NewRanger(storage *Storage) *Ranger {
-	return &Ranger{storage: storage}
+// NewRanger создаёт новый экземпляр Ranger для работы с хранилищем типа T.
+func NewRanger[T any](storage *Storage[T]) *Ranger[T] {
+	return &Ranger[T]{storage: storage}
 }
 
-func (r *Ranger) Range(callback func(key string, value string) bool) {
-	r.storage.mu.RLock()
-	defer r.storage.mu.RUnlock()
+// Range перебирает все элементы в хранилище и вызывает callback для каждого из них.
+func (r *Ranger[T]) Range(callback func(key string, value T) bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	for key, value := range r.storage.data {
 		if !callback(key, value) {
 			break
