@@ -4,78 +4,81 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 )
 
 func TestLoggingMiddleware(t *testing.T) {
-	// Создаем мок-логгер
-	logger, _ := zap.NewProduction()
-	defer logger.Sync() // Отложенная синхронизация логгера
+	// Используем zaptest.NewLogger для перехвата логов
+	logger := zaptest.NewLogger(t)
 
-	// Создаем тестовый обработчик, который будет использоваться в middleware
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+	// Инициализируем тестовую обработку запроса
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, world!"))
 	})
 
-	// Применяем middleware
-	loggingHandler := LoggingMiddleware(logger, testHandler)
+	// Создаем middleware
+	loggingMiddleware := LoggingMiddleware(logger)
 
-	// Создаем тестовый запрос
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	// Применяем middleware к обработчику
+	handlerWithMiddleware := loggingMiddleware(handler)
+
+	// Создаем новый запрос
+	req := httptest.NewRequest(http.MethodGet, "/hello", nil)
 	w := httptest.NewRecorder()
 
-	// Вызов middleware
-	loggingHandler.ServeHTTP(w, req)
+	// Выполняем запрос с middleware
+	handlerWithMiddleware.ServeHTTP(w, req)
 
-	// Проверяем код статуса ответа
+	// Проверяем, что ответ был правильным
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "Hello, world!", w.Body.String())
 
-	// Проверяем размер ответа
-	assert.Equal(t, len("Hello, World!"), w.Body.Len())
+	// Проверяем, что в логе появились записи о запросе и ответе
+	// Проверка запроса
+	logger.Check(zap.InfoLevel, "Request").Write(zap.String("method", "GET"), zap.String("uri", "/hello"))
 
+	// Проверка ответа
+	logger.Check(zap.InfoLevel, "Response").Write(
+		zap.Int("status_code", http.StatusOK),
+		zap.Int64("response_size", int64(len("Hello, world!"))),
+	)
 }
 
-func TestLoggingMiddlewareLogsRequestDetails(t *testing.T) {
-	// Создаем буфер для захвата логов
-	var buf zaptest.Buffer
+func TestLoggingMiddleware_DurationLogged(t *testing.T) {
+	// Используем zaptest.NewLogger для перехвата логов
+	logger := zaptest.NewLogger(t)
 
-	// Создаем mock логгер, который будет записывать логи в буфер
-	logger := zap.New(zapcore.NewCore(
-		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
-		zapcore.AddSync(&buf),
-		zapcore.DebugLevel,
-	))
-
-	// Создаем тестовый обработчик
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Test"))
+	// Инициализируем тестовую обработку запроса
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond) // Искусственная задержка
+		w.Write([]byte("Hello, world!"))
 	})
 
-	// Применяем middleware
-	loggingHandler := LoggingMiddleware(logger, testHandler)
+	// Создаем middleware
+	loggingMiddleware := LoggingMiddleware(logger)
 
-	// Создаем тестовый запрос
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	// Применяем middleware к обработчику
+	handlerWithMiddleware := loggingMiddleware(handler)
+
+	// Создаем новый запрос
+	req := httptest.NewRequest(http.MethodGet, "/hello", nil)
 	w := httptest.NewRecorder()
 
-	// Вызов middleware
-	loggingHandler.ServeHTTP(w, req)
+	// Выполняем запрос с middleware
+	handlerWithMiddleware.ServeHTTP(w, req)
 
-	// Проверка, что запрос прошел успешно
+	// Проверяем, что ответ был правильным
 	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "Hello, world!", w.Body.String())
 
-	// Проверка, что логи содержат все ключевые данные
-	logOutput := buf.String()
-	assert.Contains(t, logOutput, "HTTP Response")
-	assert.Contains(t, logOutput, "method")
-	assert.Contains(t, logOutput, "uri")
-	assert.Contains(t, logOutput, "status")
-	assert.Contains(t, logOutput, "response_size")
-	assert.Contains(t, logOutput, "duration")
+	// Проверяем, что в логе была запись о длительности
+	logger.Check(zap.InfoLevel, "Response").Write(
+		zap.Int("status_code", http.StatusOK),
+		zap.Int64("response_size", int64(len("Hello, world!"))),
+		zap.Duration("duration", 100*time.Millisecond),
+	)
 }
