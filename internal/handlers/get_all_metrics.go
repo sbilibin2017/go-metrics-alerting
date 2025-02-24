@@ -17,15 +17,13 @@ type GetAllMetricsService interface {
 func GetAllMetricsHandler(service GetAllMetricsService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tmpl, _ := template.New("metrics").Parse(templates.MetricsTemplate)
-
 		metrics := service.GetAllMetrics()
-
 		var responseMetrics []types.GetAllMetricsResponse
 		for _, metric := range metrics {
 			resp := types.GetAllMetricsResponse{}
 			responseMetrics = append(responseMetrics, resp.FromDomain(metric))
 		}
-
+		w.WriteHeader(http.StatusOK)
 		tmpl.Execute(w, responseMetrics)
 	}
 }
