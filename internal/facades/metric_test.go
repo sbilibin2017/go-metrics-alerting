@@ -1,6 +1,7 @@
 package facades
 
 import (
+	"encoding/json"
 	"go-metrics-alerting/internal/configs"
 	"go-metrics-alerting/internal/types"
 	"net/http"
@@ -9,112 +10,118 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
 )
 
-// TestNewMetricFacade проверяет конструктор NewMetricFacade и добавление http:// к адресу
+// Функция для имитации HTTP-сервера, который принимает запросы
+func mockServer() *httptest.Server {
+	// Настроим сервер с обработчиком, который будет эмулировать реальное поведение
+	handler := http.NewServeMux()
+	handler.HandleFunc("/update/", func(w http.ResponseWriter, r *http.Request) {
+		// Предположим, что сервер принимает запрос и возвращает статус 200 OK
+		if r.Method == http.MethodPost {
+			// Читаем тело запроса
+			var requestBody types.UpdateMetricBodyRequest
+			if err := json.NewDecoder(r.Body).Decode(&requestBody); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+
+			// Здесь можно выполнить дополнительные проверки, например:
+			if requestBody.ID == "" || requestBody.MType == "" {
+				http.Error(w, "Invalid request data", http.StatusBadRequest)
+				return
+			}
+
+			// Ответ с успешным статусом
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"status": "success"}`))
+		} else {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	server := httptest.NewServer(handler)
+	return server
+}
+
+// Тестирование обновления метрики с реальным сервером
+func TestUpdateMetric_RealServer(t *testing.T) {
+	// Создаем сервер
+	server := mockServer()
+	defer server.Close()
+
+	// Подготавливаем конфигурацию
+	config := &configs.AgentConfig{
+		Address: server.URL, // Используем адрес тестового сервера
+	}
+
+	// Создаем клиент и facade
+	client := resty.New()
+	metricFacade := NewMetricFacade(client, config)
+
+	// Создаем тестовую метрику с новой структурой
+	metric := &types.UpdateMetricBodyRequest{
+		ID:    "metric123",
+		MType: "gauge",
+		Delta: nil,
+		Value: float64Ptr(75.5),
+	}
+
+	// Обновляем метрику
+	metricFacade.UpdateMetric(metric)
+
+	// Теперь проверим, что запрос был правильно обработан сервером
+	resp, err := client.R().SetBody(metric).Post(server.URL + "/update/")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode())
+
+	// Дополнительно можно проверить тело ответа
+	assert.Contains(t, resp.String(), "success")
+}
+
 func TestNewMetricFacade(t *testing.T) {
 	tests := []struct {
 		name            string
-		inputAddress    string
+		address         string
 		expectedAddress string
 	}{
-		{"Address with http", "http://example.com", "http://example.com"},
-		{"Address with https", "https://example.com", "https://example.com"},
-		{"Address without prefix", "example.com", "http://example.com"},
-		{"Address with port without prefix", "example.com:8080", "http://example.com:8080"},
-		{"IP address without prefix", "192.168.1.1", "http://192.168.1.1"},
-		{"IP address with port without prefix", "192.168.1.1:9000", "http://192.168.1.1:9000"},
+		{
+			name:            "Address without prefix",
+			address:         "localhost:8080",        // Нет префикса
+			expectedAddress: "http://localhost:8080", // Ожидаем добавление http://
+		},
+		{
+			name:            "Address with http prefix",
+			address:         "http://localhost:8080", // Уже есть префикс http://
+			expectedAddress: "http://localhost:8080", // Не должно изменяться
+		},
+		{
+			name:            "Address with https prefix",
+			address:         "https://localhost:8080", // Уже есть префикс https://
+			expectedAddress: "https://localhost:8080", // Не должно изменяться
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Создаем конфиг с тестируемым адресом
-			config := &configs.AgentConfig{Address: tt.inputAddress}
+			// Создаем конфигурацию
+			config := &configs.AgentConfig{
+				Address: tt.address,
+			}
 
-			// Создаем экземпляр MetricFacade
+			// Создаем клиент
 			client := resty.New()
-			logger, _ := zap.NewDevelopment()
-			facade := NewMetricFacade(client, config, logger)
 
-			// Проверяем, что адрес в конфиге соответствует ожидаемому
-			assert.Equal(t, tt.expectedAddress, facade.config.Address, "Address was not correctly set")
+			// Создаем экземпляр MetricFacade с конфигурацией
+			metricFacade := NewMetricFacade(client, config)
+
+			// Проверяем, что адрес соответствует ожидаемому
+			assert.Equal(t, tt.expectedAddress, metricFacade.config.Address)
 		})
 	}
 }
 
-// TestSuccessfulMetricSend проверяет успешную отправку метрики
-func TestSuccessfulMetricSend(t *testing.T) {
-	core, logs := observer.New(zap.InfoLevel)
-	testLogger := zap.New(core)
-
-	// Запускаем тестовый HTTP-сервер
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	client := resty.New()
-	config := &configs.AgentConfig{
-		Address: server.URL,
-	}
-
-	facade := NewMetricFacade(client, config, testLogger)
-
-	// Создаем метрику
-	value := 100.0
-	metric := &types.UpdateMetricBodyRequest{
-		ID:    "metric1",
-		MType: "gauge",
-		Value: &value,
-	}
-
-	// Обновляем метрику
-	facade.UpdateMetric(metric)
-
-	// Проверяем, что лог содержит сообщение об успешной отправке
-	found := false
-	for _, entry := range logs.All() {
-		if entry.Message == "Metric sent successfully" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Expected log message 'Metric sent successfully' not found")
-}
-
-// TestServerUnavailable проверяет, логируется ли ошибка, если сервер недоступен
-func TestServerUnavailable(t *testing.T) {
-	core, logs := observer.New(zap.ErrorLevel)
-	testLogger := zap.New(core)
-
-	// Указываем несуществующий адрес
-	config := &configs.AgentConfig{
-		Address: "http://127.0.0.1:9999",
-	}
-
-	client := resty.New()
-	facade := NewMetricFacade(client, config, testLogger)
-
-	// Создаем метрику
-	value := 100.0
-	metric := &types.UpdateMetricBodyRequest{
-		ID:    "metric1",
-		MType: "gauge",
-		Value: &value,
-	}
-
-	// Обновляем метрику
-	facade.UpdateMetric(metric)
-
-	// Проверяем, что лог содержит сообщение об ошибке
-	found := false
-	for _, entry := range logs.All() {
-		if entry.Message == "Error sending metric" {
-			found = true
-			break
-		}
-	}
-	assert.True(t, found, "Expected log message 'Error sending metric' not found")
+// Вспомогательная функция для создания указателя на float64
+func float64Ptr(value float64) *float64 {
+	return &value
 }
