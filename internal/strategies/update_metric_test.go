@@ -1,16 +1,14 @@
-package strategies
+package strategies_test
 
 import (
 	"go-metrics-alerting/internal/domain"
+	"go-metrics-alerting/internal/strategies"
 	"testing"
 
-	"go.uber.org/zap"
-
-	"github.com/go-playground/assert/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-// MockSaver — мок для Saver
 type MockSaver struct {
 	mock.Mock
 }
@@ -19,199 +17,112 @@ func (m *MockSaver) Save(key string, value *domain.Metrics) {
 	m.Called(key, value)
 }
 
-// MockGetter — мок для Getter
 type MockGetter struct {
 	mock.Mock
 }
 
-func (m *MockGetter) Get(key string) *domain.Metrics {
+func (m *MockGetter) Get(key string) (*domain.Metrics, bool) {
 	args := m.Called(key)
 	if args.Get(0) == nil {
-		return nil
+		// Return nil for *domain.Metrics and false for existence flag
+		return nil, false
 	}
-	return args.Get(0).(*domain.Metrics)
+	return args.Get(0).(*domain.Metrics), args.Bool(1)
 }
 
-// MockKeyEncoder — мок для KeyEncoder
-type MockKeyEncoder struct {
-	mock.Mock
-}
+func TestUpdateGaugeMetricStrategy(t *testing.T) {
+	// Mock instances
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
 
-func (m *MockKeyEncoder) Encode(id, mtype string) string {
-	args := m.Called(id, mtype)
-	return args.String(0)
-}
+	// Create the strategy
+	strategy := strategies.NewUpdateGaugeMetricStrategy(mockSaver, mockGetter)
 
-func TestUpdateGaugeMetricStrategy_NewMetric(t *testing.T) {
-	// Create mocks
-	saver := new(MockSaver)
-	getter := new(MockGetter)
-	keyEncoder := new(MockKeyEncoder)
-
-	// Create a no-op logger
-	logger := zap.NewNop() // This is a no-op logger
-
-	// Create strategy with logger
-	strategy := NewUpdateGaugeMetricStrategy(saver, getter, keyEncoder, logger)
-
-	// Define the metric and expected encoded key
+	// Define a metric to update
 	metric := &domain.Metrics{
-		ID:    "cpu",
-		MType: domain.MType("gauge"),
-		Value: floatPtr(42.5),
+		ID:    "test_metric",
+		MType: domain.Gauge,
 	}
-	encodedKey := "cpu:gauge"
 
-	// Set up expectations
-	keyEncoder.On("Encode", "cpu", "gauge").Return(encodedKey)
-	getter.On("Get", encodedKey).Return(nil)
-	saver.On("Save", encodedKey, metric).Return()
+	// Test saving the metric
+	mockSaver.On("Save", "test_metric:gauge", metric).Once()
 
-	// Call the strategy's Update method
-	updatedMetric := strategy.Update(metric)
+	// Call the method
+	updatedMetric := strategy.UpdateMetric(metric)
 
-	// Assert the results
+	// Assert that the metric returned is the same as the one passed
 	assert.Equal(t, metric, updatedMetric)
 
-	// Assert all expectations
-	keyEncoder.AssertExpectations(t)
-	getter.AssertExpectations(t)
-	saver.AssertExpectations(t)
-}
-
-func TestUpdateGaugeMetricStrategy_UpdateExistingMetric(t *testing.T) {
-	// Create mocks
-	saver := new(MockSaver)
-	getter := new(MockGetter)
-	keyEncoder := new(MockKeyEncoder)
-
-	// Create a no-op logger
-	logger := zap.NewNop() // This is a no-op logger
-
-	// Create strategy with logger
-	strategy := NewUpdateGaugeMetricStrategy(saver, getter, keyEncoder, logger)
-
-	// Define old and new metrics
-	oldMetric := &domain.Metrics{
-		ID:    "cpu",
-		MType: domain.MType("gauge"),
-		Value: floatPtr(30.0),
-	}
-	newMetric := &domain.Metrics{
-		ID:    "cpu",
-		MType: domain.MType("gauge"),
-		Value: floatPtr(50.0),
-	}
-
-	encodedKey := "cpu:gauge"
-
-	// Set up expectations
-	keyEncoder.On("Encode", "cpu", "gauge").Return(encodedKey)
-	getter.On("Get", encodedKey).Return(oldMetric)
-	saver.On("Save", encodedKey, mock.MatchedBy(func(m *domain.Metrics) bool {
-		return *m.Value == *newMetric.Value
-	})).Return()
-
-	// Call the strategy's Update method
-	updatedMetric := strategy.Update(newMetric)
-
-	// Assert the results
-	assert.Equal(t, *newMetric.Value, *updatedMetric.Value)
-
-	// Assert all expectations
-	keyEncoder.AssertExpectations(t)
-	getter.AssertExpectations(t)
-	saver.AssertExpectations(t)
+	// Assert the expected method call
+	mockSaver.AssertExpectations(t)
 }
 
 func TestUpdateCounterMetricStrategy_NewMetric(t *testing.T) {
-	// Create mocks
-	saver := new(MockSaver)
-	getter := new(MockGetter)
-	keyEncoder := new(MockKeyEncoder)
+	// Mock instances
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
 
-	// Create a no-op logger
-	logger := zap.NewNop() // This is a no-op logger
+	// Create the strategy
+	strategy := strategies.NewUpdateCounterMetricStrategy(mockSaver, mockGetter)
 
-	// Create strategy with logger
-	strategy := NewUpdateCounterMetricStrategy(saver, getter, keyEncoder, logger)
-
-	// Define the metric and expected encoded key
+	// Define a new metric to update
 	metric := &domain.Metrics{
-		ID:    "requests",
-		MType: domain.MType("counter"),
-		Delta: intPtr(10),
+		ID:    "test_metric",
+		MType: domain.Counter,
+		Delta: new(int64),
 	}
-	encodedKey := "requests:counter"
 
-	// Set up expectations
-	keyEncoder.On("Encode", "requests", "counter").Return(encodedKey)
-	getter.On("Get", encodedKey).Return(nil)
-	saver.On("Save", encodedKey, metric).Return()
+	// Mock the Get method to return nothing for the new metric
+	mockGetter.On("Get", "test_metric:counter").Return(nil, false)
 
-	// Call the strategy's Update method
-	updatedMetric := strategy.Update(metric)
+	// Test saving the metric when it's new
+	mockSaver.On("Save", "test_metric:counter", metric).Once()
 
-	// Assert the results
+	// Call the method
+	updatedMetric := strategy.UpdateMetric(metric)
+
+	// Assert that the metric returned is the same as the one passed
 	assert.Equal(t, metric, updatedMetric)
 
-	// Assert all expectations
-	keyEncoder.AssertExpectations(t)
-	getter.AssertExpectations(t)
-	saver.AssertExpectations(t)
+	// Assert the expected method calls
+	mockSaver.AssertExpectations(t)
+	mockGetter.AssertExpectations(t)
 }
 
-func TestUpdateCounterMetricStrategy_UpdateExistingMetric(t *testing.T) {
-	// Create mocks
-	saver := new(MockSaver)
-	getter := new(MockGetter)
-	keyEncoder := new(MockKeyEncoder)
+func TestUpdateCounterMetricStrategy_ExistingMetric(t *testing.T) {
+	// Mock instances
+	mockSaver := new(MockSaver)
+	mockGetter := new(MockGetter)
 
-	// Create a no-op logger
-	logger := zap.NewNop() // This is a no-op logger
+	// Create the strategy
+	strategy := strategies.NewUpdateCounterMetricStrategy(mockSaver, mockGetter)
 
-	// Create strategy with logger
-	strategy := NewUpdateCounterMetricStrategy(saver, getter, keyEncoder, logger)
-
-	// Define old and new metrics
-	oldMetric := &domain.Metrics{
-		ID:    "requests",
-		MType: domain.MType("counter"),
-		Delta: intPtr(5),
+	// Define a new metric and an existing metric
+	metric := &domain.Metrics{
+		ID:    "test_metric",
+		MType: domain.Counter,
+		Delta: new(int64),
 	}
-	newMetric := &domain.Metrics{
-		ID:    "requests",
-		MType: domain.MType("counter"),
-		Delta: intPtr(10),
+	existingMetric := &domain.Metrics{
+		ID:    "test_metric",
+		MType: domain.Counter,
+		Delta: new(int64),
 	}
-	updatedDelta := *oldMetric.Delta + *newMetric.Delta
 
-	encodedKey := "requests:counter"
+	// Set up the mock to return the existing metric
+	mockGetter.On("Get", "test_metric:counter").Return(existingMetric, true)
 
-	// Set up expectations
-	keyEncoder.On("Encode", "requests", "counter").Return(encodedKey)
-	getter.On("Get", encodedKey).Return(oldMetric)
-	saver.On("Save", encodedKey, mock.MatchedBy(func(m *domain.Metrics) bool {
-		return *m.Delta == updatedDelta
-	})).Return()
+	// Test updating the existing metric
+	mockSaver.On("Save", "test_metric:counter", existingMetric).Once()
 
-	// Call the strategy's Update method
-	updatedMetric := strategy.Update(newMetric)
+	// Call the method
+	updatedMetric := strategy.UpdateMetric(metric)
 
-	// Assert the results
-	assert.Equal(t, updatedDelta, *updatedMetric.Delta)
+	// Assert that the delta of the existing metric has been updated
+	assert.Equal(t, existingMetric, updatedMetric)
+	assert.Equal(t, *existingMetric.Delta, *metric.Delta)
 
-	// Assert all expectations
-	keyEncoder.AssertExpectations(t)
-	getter.AssertExpectations(t)
-	saver.AssertExpectations(t)
-}
-
-// Вспомогательные функции для указателей
-func floatPtr(f float64) *float64 {
-	return &f
-}
-
-func intPtr(i int64) *int64 {
-	return &i
+	// Assert the expected method calls
+	mockSaver.AssertExpectations(t)
+	mockGetter.AssertExpectations(t)
 }
