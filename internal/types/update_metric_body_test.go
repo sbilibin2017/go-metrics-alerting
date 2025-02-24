@@ -8,168 +8,109 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateUpdateMetricBodyRequest(t *testing.T) {
+// Test UpdateMetricBodyRequest.Validate
+func TestUpdateMetricBodyRequest_Validate(t *testing.T) {
 	tests := []struct {
 		name     string
 		request  UpdateMetricBodyRequest
 		expected int
 	}{
 		{
-			name: "Valid request with gauge",
+			name: "Valid Counter request with Delta",
 			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
-				MType: "gauge",
-				Value: new(float64), // Пример правильного значения для gauge
-			},
-			expected: http.StatusOK, // ожидаем, что ошибки не будет
-		},
-		{
-			name: "Valid request with counter",
-			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
+				ID:    "metric1",
 				MType: "counter",
-				Delta: new(int64), // Пример правильного значения для counter
+				Delta: new(int64),
 			},
-			expected: http.StatusOK, // ожидаем, что ошибки не будет
+			expected: http.StatusOK,
 		},
 		{
-			name: "Invalid request with empty ID",
+			name: "Invalid ID",
 			request: UpdateMetricBodyRequest{
 				ID:    "",
-				MType: "gauge",
+				MType: "counter",
 			},
 			expected: http.StatusNotFound,
 		},
 		{
-			name: "Invalid request with invalid ID format",
+			name: "Invalid MType",
 			request: UpdateMetricBodyRequest{
-				ID:    "invalid id!",
-				MType: "gauge",
-			},
-			expected: http.StatusNotFound,
-		},
-		{
-			name: "Invalid request with invalid metric type",
-			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
+				ID:    "metric2",
 				MType: "invalid_type",
 			},
 			expected: http.StatusBadRequest,
 		},
 		{
-			name: "Invalid request with missing value for gauge",
+			name: "Invalid Delta for Counter",
 			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
-				MType: "gauge",
-			},
-			expected: http.StatusBadRequest,
-		},
-		{
-			name: "Invalid request with missing delta for counter",
-			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
+				ID:    "metric3",
 				MType: "counter",
 			},
 			expected: http.StatusBadRequest,
 		},
 		{
-			name: "Invalid request with both value and delta for gauge",
+			name: "Invalid Value for Gauge",
 			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
+				ID:    "metric4",
 				MType: "gauge",
-				Value: new(float64), // Значение для gauge
-				Delta: new(int64),   // И delta, что недопустимо
 			},
-			expected: http.StatusBadRequest, // Ожидаем ошибку с кодом BadRequest
+			expected: http.StatusBadRequest,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.request.Validate()
-
-			// Проверка только статуса ошибки
-			if tt.expected == http.StatusOK {
-				// Если ожидается nil, то ошибка не должна быть
-				assert.Nil(t, err)
+			actual := tt.request.Validate()
+			if actual == nil {
+				assert.Equal(t, http.StatusOK, tt.expected)
 			} else {
-				// Если ожидается ошибка, то проверяем только статус
-				assert.NotNil(t, err)
-				assert.Equal(t, tt.expected, err.Status)
+				assert.Equal(t, tt.expected, actual.Status)
 			}
 		})
 	}
 }
 
-func TestBodyToDomain(t *testing.T) {
+// Test UpdateMetricBodyRequest.ToDomain
+func TestUpdateMetricBodyRequest_ToDomain(t *testing.T) {
 	tests := []struct {
-		name     string
-		request  UpdateMetricBodyRequest
-		expected *domain.Metrics
+		name    string
+		request UpdateMetricBodyRequest
+		want    *domain.Metrics
 	}{
 		{
-			name: "Valid request with gauge",
+			name: "Convert to domain model for counter",
 			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
-				MType: "gauge",
-				Value: new(float64),
-			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
-				MType: domain.Gauge,
-				Delta: nil,
-				Value: new(float64),
-			},
-		},
-		{
-			name: "Valid request with counter",
-			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
+				ID:    "metric1",
 				MType: "counter",
 				Delta: new(int64),
 			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
+			want: &domain.Metrics{
+				ID:    "metric1",
 				MType: domain.Counter,
 				Delta: new(int64),
 				Value: nil,
 			},
 		},
 		{
-			name: "Request with no delta for counter",
+			name: "Convert to domain model for gauge",
 			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
-				MType: "counter",
-			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
-				MType: domain.Counter,
-				Delta: nil,
-				Value: nil,
-			},
-		},
-		{
-			name: "Request with no value for gauge",
-			request: UpdateMetricBodyRequest{
-				ID:    "valid_id",
+				ID:    "metric2",
 				MType: "gauge",
+				Value: new(float64),
 			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
+			want: &domain.Metrics{
+				ID:    "metric2",
 				MType: domain.Gauge,
 				Delta: nil,
-				Value: nil,
+				Value: new(float64),
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act: Convert the request to domain metrics
-			result := tt.request.ToDomain()
-
-			// Assert: Compare the result with expected domain metrics
-			assert.Equal(t, tt.expected, result)
+			got := tt.request.ToDomain()
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

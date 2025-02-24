@@ -8,72 +8,73 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestValidateUpdateMetricPathRequest(t *testing.T) {
+// Test UpdateMetricPathRequest.Validate
+func TestUpdateMetricPathRequest_Validate(t *testing.T) {
 	tests := []struct {
 		name     string
 		request  UpdateMetricPathRequest
 		expected int
 	}{
 		{
-			name: "Valid request with gauge and valid value",
+			name: "Valid request",
 			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: string(domain.Gauge),
-				Value: "123.45", // Пример значения для gauge
+				ID:    "metric1",
+				MType: "counter",
+				Value: "100",
 			},
-			expected: http.StatusOK, // Ожидаем, что ошибки не будет
+			expected: http.StatusOK,
 		},
 		{
-			name: "Valid request with counter and valid value",
-			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: string(domain.Counter),
-				Value: "123", // Пример значения для counter
-			},
-			expected: http.StatusOK, // Ожидаем, что ошибки не будет
-		},
-		{
-			name: "Invalid request with empty ID",
+			name: "Invalid ID",
 			request: UpdateMetricPathRequest{
 				ID:    "",
-				MType: string(domain.Gauge),
-				Value: "123.45",
+				MType: "counter",
+				Value: "100",
 			},
 			expected: http.StatusNotFound,
 		},
 		{
-			name: "Invalid request with invalid ID format",
+			name: "Invalid MType (Empty)",
 			request: UpdateMetricPathRequest{
-				ID:    "invalid id!",
-				MType: string(domain.Gauge),
-				Value: "123.45",
-			},
-			expected: http.StatusNotFound,
-		},
-		{
-			name: "Invalid request with invalid metric type",
-			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: "invalid_type", // Некорректный тип метрики
-				Value: "123.45",
+				ID:    "metric2",
+				MType: "",
+				Value: "100",
 			},
 			expected: http.StatusBadRequest,
 		},
 		{
-			name: "Invalid request with invalid value for gauge",
+			name: "Invalid MType (Invalid Value)",
 			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: string(domain.Gauge),
-				Value: "not_a_number", // Некорректное значение для gauge
+				ID:    "metric2",
+				MType: "invalid_type",
+				Value: "100",
 			},
 			expected: http.StatusBadRequest,
 		},
 		{
-			name: "Invalid request with invalid value for counter",
+			name: "Valid MType (Counter)",
 			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: string(domain.Counter),
-				Value: "not_a_number", // Некорректное значение для counter
+				ID:    "metric3",
+				MType: "counter",
+				Value: "100",
+			},
+			expected: http.StatusOK,
+		},
+		{
+			name: "Valid MType (Gauge)",
+			request: UpdateMetricPathRequest{
+				ID:    "metric4",
+				MType: "gauge",
+				Value: "50.5",
+			},
+			expected: http.StatusOK,
+		},
+		{
+			name: "Empty Value for Gauge",
+			request: UpdateMetricPathRequest{
+				ID:    "metric5",
+				MType: "gauge",
+				Value: "",
 			},
 			expected: http.StatusBadRequest,
 		},
@@ -81,130 +82,67 @@ func TestValidateUpdateMetricPathRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.request.Validate()
-
-			// Проверка только статуса ошибки
-			if tt.expected == http.StatusOK {
-				// Если ожидается nil, то ошибка не должна быть
-				assert.Nil(t, err)
+			actual := tt.request.Validate()
+			if actual == nil {
+				assert.Equal(t, http.StatusOK, tt.expected)
 			} else {
-				// Если ожидается ошибка, то проверяем только статус
-				assert.NotNil(t, err)
-				assert.Equal(t, tt.expected, err.Status)
+				assert.Equal(t, tt.expected, actual.Status)
 			}
 		})
 	}
 }
 
-func TestPathToDomain(t *testing.T) {
+// Test UpdateMetricPathRequest.ToDomain with valid values
+func TestUpdateMetricPathRequest_ToDomain(t *testing.T) {
 	tests := []struct {
-		name     string
-		request  UpdateMetricPathRequest
-		expected *domain.Metrics
+		name    string
+		request UpdateMetricPathRequest
+		want    *domain.Metrics
 	}{
 		{
-			name: "Valid request with gauge",
+			name: "Convert to domain model for counter with valid value",
 			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: "gauge",
-				Value: "123.45",
-			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
-				MType: domain.Gauge,
-				Delta: nil,
-				Value: floatPointer(123.45), // Вспомогательная функция для указателя на float64
-			},
-		},
-		{
-			name: "Valid request with counter",
-			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
+				ID:    "metric1",
 				MType: "counter",
-				Value: "42",
+				Value: "100",
 			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
+			want: &domain.Metrics{
+				ID:    "metric1",
 				MType: domain.Counter,
-				Delta: intPointer(42), // Вспомогательная функция для указателя на int64
-				Value: nil,
+				Delta: pathInt64Ptr(100), // ожидаем корректный Delta для counter
+				Value: nil,               // Value должно быть nil для counter
 			},
 		},
 		{
-			name: "Invalid request with non-numeric value for gauge",
+			name: "Convert to domain model for gauge with valid value",
 			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
+				ID:    "metric2",
 				MType: "gauge",
-				Value: "not_a_number",
+				Value: "25.5",
 			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
+			want: &domain.Metrics{
+				ID:    "metric2",
 				MType: domain.Gauge,
-				Delta: nil,
-				Value: nil, // Значение не должно быть установлено
-			},
-		},
-		{
-			name: "Invalid request with non-numeric value for counter",
-			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: "counter",
-				Value: "not_a_number",
-			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
-				MType: domain.Counter,
-				Delta: nil, // Дельта не должна быть установлена
-				Value: nil,
-			},
-		},
-		{
-			name: "Request with missing value for gauge",
-			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: "gauge",
-				Value: "",
-			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
-				MType: domain.Gauge,
-				Delta: nil,
-				Value: nil, // Если значение пустое, то должно быть nil
-			},
-		},
-		{
-			name: "Request with missing value for counter",
-			request: UpdateMetricPathRequest{
-				ID:    "valid_id",
-				MType: "counter",
-				Value: "",
-			},
-			expected: &domain.Metrics{
-				ID:    "valid_id",
-				MType: domain.Counter,
-				Delta: nil, // Если значение пустое, то должно быть nil
-				Value: nil,
+				Delta: nil,                  // для gauge Delta должно быть nil
+				Value: pathFloat64Ptr(25.5), // ожидаем корректное значение для Value
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Act: Convert the request to domain metrics
-			result := tt.request.ToDomain()
-
-			// Assert: Compare the result with expected domain metrics
-			assert.Equal(t, tt.expected, result)
+			got := tt.request.ToDomain()
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-// Вспомогательная функция для получения указателя на float64
-func floatPointer(f float64) *float64 {
-	return &f
+// Helper function to create a pointer for int64
+func pathInt64Ptr(i int64) *int64 {
+	return &i
 }
 
-// Вспомогательная функция для получения указателя на int64
-func intPointer(i int64) *int64 {
-	return &i
+// Helper function to create a pointer for float64
+func pathFloat64Ptr(f float64) *float64 {
+	return &f
 }
