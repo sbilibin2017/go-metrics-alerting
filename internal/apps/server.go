@@ -236,7 +236,7 @@ func loadMetricsFromFile(
 		return nil
 	}
 
-	// Retrieve metrics from the secondary repository (e.g., file storage)
+	// Retrieve metric from the secondary repository (e.g., file storage)
 	metrics, err := repo.FileRepo.ListMetrics(ctx)
 	if err != nil {
 		return err
