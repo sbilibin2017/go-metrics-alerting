@@ -238,5 +238,4 @@ func reportMetrics(config *configs.AgentConfig, metrics []types.Metrics) {
 		}
 	}
 
-	return
 }
