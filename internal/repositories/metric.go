@@ -10,7 +10,7 @@ import (
 
 // MetricRepository holds the three repositories.
 type MetricRepository struct {
-	DbRepo     *MetricDBRepository
+	DBRepo     *MetricDBRepository
 	FileRepo   *MetricFileRepository
 	MemoryRepo *MetricMemoryRepository
 }
@@ -40,7 +40,7 @@ func NewMetricRepository(c *configs.ServerConfig, file *os.File, db *sql.DB) *Me
 
 	// Return the MetricRepository that holds them
 	return &MetricRepository{
-		DbRepo:     dbRepo,
+		DBRepo:     dbRepo,
 		FileRepo:   fileRepo,
 		MemoryRepo: memoryRepo,
 	}
@@ -56,8 +56,8 @@ type MetricRepo interface {
 // GetMainRepository returns the repository with the highest priority (db -> file -> memory), based on ServerConfig.
 func (mr *MetricRepository) GetMainRepository(c *configs.ServerConfig) MetricRepo {
 	// Check DB repository if DatabaseDSN is set
-	if mr.DbRepo != nil && c.DatabaseDSN != "" {
-		return mr.DbRepo
+	if mr.DBRepo != nil && c.DatabaseDSN != "" {
+		return mr.DBRepo
 	}
 
 	// Check File repository if FileStoragePath is set
