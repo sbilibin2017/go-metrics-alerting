@@ -49,7 +49,7 @@ func NewMetricRepository(c *configs.ServerConfig, file *os.File, db *sql.DB) *Me
 // MetricRepositoryInterface defines the common methods for all repositories.
 type MetricRepo interface {
 	SaveMetrics(ctx context.Context, metrics []*types.Metrics) error
-	FilterMetricsByTypeAndId(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error)
+	FilterMetricsByTypeAndID(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error)
 	ListMetrics(ctx context.Context) ([]*types.Metrics, error)
 }
 

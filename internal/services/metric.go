@@ -8,7 +8,7 @@ import (
 
 type MetricRepository interface {
 	SaveMetrics(ctx context.Context, metrics []*types.Metrics) error
-	FilterMetricsByTypeAndId(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error)
+	FilterMetricsByTypeAndID(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error)
 	ListMetrics(ctx context.Context) ([]*types.Metrics, error)
 }
 
@@ -28,7 +28,7 @@ func (s *MetricService) UpdatesMetric(ctx context.Context, metrics []*types.Metr
 	}
 
 	// Filter existing metrics
-	existingMetrics, err := s.repo.FilterMetricsByTypeAndId(ctx, metricIDs)
+	existingMetrics, err := s.repo.FilterMetricsByTypeAndID(ctx, metricIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -70,10 +70,10 @@ func (s *MetricService) UpdatesMetric(ctx context.Context, metrics []*types.Metr
 	return updatedMetrics, nil
 }
 
-// GetMetricByTypeAndId fetches a metric by its ID and type.
-func (s *MetricService) GetMetricByTypeAndId(ctx context.Context, id types.MetricID) (*types.Metrics, error) {
+// GetMetricByTypeAndID fetches a metric by its ID and type.
+func (s *MetricService) GetMetricByTypeAndID(ctx context.Context, id types.MetricID) (*types.Metrics, error) {
 	// Filter metrics by ID and type
-	metrics, err := s.repo.FilterMetricsByTypeAndId(ctx, []types.MetricID{id})
+	metrics, err := s.repo.FilterMetricsByTypeAndID(ctx, []types.MetricID{id})
 	if err != nil {
 		return nil, err
 	}

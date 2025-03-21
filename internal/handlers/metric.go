@@ -17,7 +17,7 @@ import (
 // MetricServiceInterface defines methods for managing metrics.
 type MetricService interface {
 	UpdatesMetric(ctx context.Context, metrics []*types.Metrics) ([]*types.Metrics, error)
-	GetMetricByTypeAndId(ctx context.Context, id types.MetricID) (*types.Metrics, error)
+	GetMetricByTypeAndID(ctx context.Context, id types.MetricID) (*types.Metrics, error)
 	ListAllMetrics(ctx context.Context) ([]*types.Metrics, error)
 }
 
@@ -195,8 +195,8 @@ func (h *MetricHandler) UpdateMetricBodyHandler(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(updatedMetrics)
 }
 
-// GetMetricByTypeAndIdPathHandler handles retrieving a metric via path parameters.
-func (h *MetricHandler) GetMetricByTypeAndIdPathHandler(w http.ResponseWriter, r *http.Request) {
+// GetMetricByTypeAndIDPathHandler handles retrieving a metric via path parameters.
+func (h *MetricHandler) GetMetricByTypeAndIDPathHandler(w http.ResponseWriter, r *http.Request) {
 	metricType := chi.URLParam(r, "type")
 	metricID := chi.URLParam(r, "id")
 
@@ -209,7 +209,7 @@ func (h *MetricHandler) GetMetricByTypeAndIdPathHandler(w http.ResponseWriter, r
 		return
 	}
 
-	metric, err := h.svc.GetMetricByTypeAndId(r.Context(), types.MetricID{Type: metricType, ID: metricID})
+	metric, err := h.svc.GetMetricByTypeAndID(r.Context(), types.MetricID{Type: metricType, ID: metricID})
 	if err != nil {
 		if errors.Is(err, services.ErrMetricNotFound) {
 			http.Error(w, "Metric not found", http.StatusNotFound)
@@ -236,8 +236,8 @@ func (h *MetricHandler) GetMetricByTypeAndIdPathHandler(w http.ResponseWriter, r
 
 }
 
-// GetMetricByTypeAndIdBodyHandler handles retrieving a metric via request body.
-func (h *MetricHandler) GetMetricByTypeAndIdBodyHandler(w http.ResponseWriter, r *http.Request) {
+// GetMetricByTypeAndIDBodyHandler handles retrieving a metric via request body.
+func (h *MetricHandler) GetMetricByTypeAndIDBodyHandler(w http.ResponseWriter, r *http.Request) {
 	var metricRequest types.MetricID
 	if err := json.NewDecoder(r.Body).Decode(&metricRequest); err != nil {
 		http.Error(w, "Invalid input", http.StatusBadRequest)
@@ -254,7 +254,7 @@ func (h *MetricHandler) GetMetricByTypeAndIdBodyHandler(w http.ResponseWriter, r
 		return
 	}
 
-	metric, err := h.svc.GetMetricByTypeAndId(r.Context(), metricRequest)
+	metric, err := h.svc.GetMetricByTypeAndID(r.Context(), metricRequest)
 	if err != nil {
 		if errors.Is(err, services.ErrMetricNotFound) {
 			http.Error(w, "Metric not found", http.StatusNotFound)

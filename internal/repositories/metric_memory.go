@@ -28,8 +28,8 @@ func (mr *MetricMemoryRepository) SaveMetrics(ctx context.Context, metrics []*ty
 	return nil
 }
 
-// FilterMetricsByTypeAndId filters metrics by their IDs and types, and returns matching metrics.
-func (mr *MetricMemoryRepository) FilterMetricsByTypeAndId(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error) {
+// FilterMetricsByTypeAndID filters metrics by their IDs and types, and returns matching metrics.
+func (mr *MetricMemoryRepository) FilterMetricsByTypeAndID(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error) {
 	var result []*types.Metrics
 
 	// Iterate through the list of MetricID objects

@@ -62,8 +62,8 @@ func (mr *MetricFileRepository) SaveMetrics(ctx context.Context, metrics []*type
 	return nil
 }
 
-// FilterMetricsByTypeAndId filters metrics by their IDs and returns matching metrics.
-func (mr *MetricFileRepository) FilterMetricsByTypeAndId(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error) {
+// FilterMetricsByTypeAndID filters metrics by their IDs and returns matching metrics.
+func (mr *MetricFileRepository) FilterMetricsByTypeAndID(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error) {
 	mr.mu.Lock()
 	defer mr.mu.Unlock()
 

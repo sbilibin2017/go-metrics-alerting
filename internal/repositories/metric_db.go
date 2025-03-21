@@ -61,8 +61,8 @@ func (mr *MetricDBRepository) SaveMetrics(ctx context.Context, metrics []*types.
 	return err
 }
 
-// FilterMetricsByTypeAndId filters metrics by their IDs and types, and returns matching metrics.
-func (mr *MetricDBRepository) FilterMetricsByTypeAndId(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error) {
+// FilterMetricsByTypeAndID filters metrics by their IDs and types, and returns matching metrics.
+func (mr *MetricDBRepository) FilterMetricsByTypeAndID(ctx context.Context, metricIDs []types.MetricID) ([]*types.Metrics, error) {
 	// Build query with WHERE clause for metric_id and metric_type.
 	query := "SELECT id, type, delta, value FROM metrics WHERE "
 	var args []interface{}
