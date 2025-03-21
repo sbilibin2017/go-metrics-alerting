@@ -138,9 +138,7 @@ func runAgentApp(ctx context.Context, config *configs.AgentConfig) error {
 			collectMetrics(&metrics, &pollCount)
 		case <-tickerReport.C:
 			// Handling retriable errors for reportMetrics
-			if err := reportMetrics(config, metrics); err != nil {
-				// Log error if report was not sent, you may want to add retry mechanism here
-			}
+			reportMetrics(config, metrics)
 			resetMetrics(&metrics, &pollCount)
 		case <-sigChan:
 			return nil
@@ -204,7 +202,7 @@ func resetMetrics(metrics *[]types.Metrics, pollCount *int64) {
 }
 
 // reportMetrics отправляет метрики на сервер с обработкой retriable-ошибок
-func reportMetrics(config *configs.AgentConfig, metrics []types.Metrics) error {
+func reportMetrics(config *configs.AgentConfig, metrics []types.Metrics) {
 	// Параметры для retry
 	maxRetries := 3
 	retryIntervals := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
@@ -212,7 +210,7 @@ func reportMetrics(config *configs.AgentConfig, metrics []types.Metrics) error {
 	// Marshal metrics to JSON
 	data, err := json.MarshalIndent(metrics, "", "  ")
 	if err != nil {
-		return err
+		return
 	}
 
 	// Prepare the URL and check if it has a scheme
@@ -229,16 +227,16 @@ func reportMetrics(config *configs.AgentConfig, metrics []types.Metrics) error {
 			defer resp.Body.Close()
 
 			// Reset metrics after reporting
-			return nil
+			return
 		}
 
 		// Log error and retry if attempts left
 		if attempt < maxRetries-1 {
 			time.Sleep(retryIntervals[attempt])
 		} else {
-			return err
+			return
 		}
 	}
 
-	return nil
+	return
 }
