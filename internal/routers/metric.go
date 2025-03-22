@@ -1,64 +1,42 @@
 package routers
 
 import (
+	"go-metrics-alerting/internal/configs"
 	"go-metrics-alerting/internal/middlewares"
 	"net/http"
 
-	"github.com/go-chi/chi"
-	"go.uber.org/zap"
+	"github.com/go-chi/chi/v5"
 )
 
-// RegisterMetricsHandlers регистрирует обработчики для работы с метриками.
-func RegisterMetricsHandlers(
-	r chi.Router,
-	logger *zap.Logger,
-	updateBodyHandler http.HandlerFunc,
-	updatePathHandler http.HandlerFunc,
-	getBodyHandler http.HandlerFunc,
-	getPathHandler http.HandlerFunc,
-	getAllHandler http.HandlerFunc,
-) {
-	// Регистрируем обработчики для каждого маршрута с нужными middlewares
+// MetricHandlers defines the set of handler methods required for managing metrics.
+type MetricHandlers interface {
+	UpdateMetricPathHandler(w http.ResponseWriter, r *http.Request)
+	UpdatesMetricBodyHandler(w http.ResponseWriter, r *http.Request)
+	UpdateMetricBodyHandler(w http.ResponseWriter, r *http.Request)
+	GetMetricByTypeAndIDPathHandler(w http.ResponseWriter, r *http.Request)
+	GetMetricByTypeAndIDBodyHandler(w http.ResponseWriter, r *http.Request)
+	ListMetricsHTMLHandler(w http.ResponseWriter, r *http.Request)
+}
 
-	// POST для обновления метрики через тело запроса с JSON middleware
-	r.With(
-		middlewares.DateMiddleware,
-		middlewares.ContentLengthMiddleware,
-		middlewares.JSONContentType,
-		middlewares.LoggingMiddleware(logger),
-		middlewares.GzipMiddleware,
-	).Post("/update/", updateBodyHandler)
+type MetricRouter struct {
+	*chi.Mux
+	config *configs.ServerConfig
+}
 
-	// POST для обновления метрики по ID с TextPlainContentType middleware
-	r.With(
-		middlewares.DateMiddleware,
-		middlewares.ContentLengthMiddleware,
-		middlewares.TextPlainContentType,
-		middlewares.LoggingMiddleware(logger),
-	).Post("/update/{type}/{id}/{value}", updatePathHandler)
+// NewMetricRouter initializes and returns a new MetricRouter with the provided handlers and config.
+func NewMetricRouter(config *configs.ServerConfig, h MetricHandlers) *MetricRouter {
+	r := chi.NewRouter()
 
-	// GET для получения метрики через тело запроса с JSON middleware
-	r.With(
-		middlewares.DateMiddleware,
-		middlewares.ContentLengthMiddleware,
-		middlewares.JSONContentType,
-		middlewares.LoggingMiddleware(logger),
-		middlewares.GzipMiddleware,
-	).Get("/value/", getBodyHandler)
+	r.Use(middlewares.LoggingMiddleware())
+	r.Use(middlewares.GzipMiddleware())
+	r.Use(middlewares.TimeoutMiddleware())
 
-	// GET для получения метрики по ID с TextPlainContentType middleware
-	r.With(
-		middlewares.DateMiddleware,
-		middlewares.ContentLengthMiddleware,
-		middlewares.TextPlainContentType,
-		middlewares.LoggingMiddleware(logger),
-	).Get("/value/{type}/{id}", getPathHandler)
+	r.Post("/update/{type}/{id}/{value}", h.UpdateMetricPathHandler)
+	r.Post("/updates/", h.UpdatesMetricBodyHandler)
+	r.Post("/update/", h.UpdateMetricBodyHandler)
+	r.Get("/value/{type}/{id}", h.GetMetricByTypeAndIDPathHandler)
+	r.Post("/value/", h.GetMetricByTypeAndIDBodyHandler)
+	r.Get("/", h.ListMetricsHTMLHandler)
 
-	// GET для получения всех метрик с JSON middleware
-	r.With(
-		middlewares.DateMiddleware,
-		middlewares.ContentLengthMiddleware,
-		middlewares.HTMLContentType,
-		middlewares.LoggingMiddleware(logger),
-	).Get("/", getAllHandler)
+	return &MetricRouter{Mux: r, config: config}
 }
